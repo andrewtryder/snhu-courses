@@ -14,9 +14,16 @@ def format_data(data, node_ids, edge_ids):
     nodes = []
     edges = []
     prefix_colors = {}  # Dictionary to map prefixes to colors
+    default_color = '#FFFFFF'  # Default color when all colors are exhausted
+
+    primary_colors = [
+        '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF',  # Add more colors here
+        '#00FFFF', '#FF8000', '#008000', '#000080', '#800080',
+        '#FFC0CB', '#800000', '#008080', '#808000', '#C0C0C0',
+        '#008000', '#800080', '#FF00FF', '#00FF00', '#0000FF'
+    ]
 
     def generate_color():
-        primary_colors = ['#FF0000', '#00FF00', '#0000FF']  # Red, Green, Blue
         return random.choice(primary_colors)
 
     def extract_prefix(course_id):
@@ -31,7 +38,10 @@ def format_data(data, node_ids, edge_ids):
             prefix = extract_prefix(node_id)
             if prefix:
                 if prefix not in prefix_colors:
-                    prefix_colors[prefix] = generate_color()
+                    if len(prefix_colors) < len(primary_colors):
+                        prefix_colors[prefix] = primary_colors[len(prefix_colors)]
+                    else:
+                        prefix_colors[prefix] = default_color
 
                 color = prefix_colors[prefix]
 
