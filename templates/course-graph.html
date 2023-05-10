@@ -7,7 +7,7 @@
 		#mynetwork {
 			width: 1200px;
 			height: 1200px;
-			border: 2px solid lightgray;
+			border: 0px solid lightgray;
 		}
 	</style>
 	<script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
@@ -27,6 +27,8 @@
                 title: 'full_title' // set the title to full_title
             },
             interaction: {
+	   			navigationButtons: true,
+      			keyboard: true,
                 dragNodes: false,
                 dragView: false,
                 hover: true
