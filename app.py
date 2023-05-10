@@ -1,5 +1,5 @@
-from flask import Flask, jsonify, request, render_template, redirect, url_for
-from course_tree_generator import create_course_tree, create_courses_trees
+from flask import Flask, jsonify, request, render_template
+from course_tree_generator import create_course_tree
 from database import get_course_info, get_courses_info
 from typing import Union, Tuple, Dict
 from flask_cors import CORS
