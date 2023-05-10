@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Network Graph</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  </head>
+  <body>
+    <div id="plot"></div>
+    <script>
+      var plotDiv = document.getElementById('plot');
+      plotDiv.innerHTML = '{{ plot_html|safe }}';
+    </script>
+  </body>
+</html>

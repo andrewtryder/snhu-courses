@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Course Prerequisites Graph</title>
+	<style type="text/css">
+		#mynetwork {
+			width: 100%;
+			height: 500px;
+			border: 2px solid lightgray;
+		}
+	</style>
+	<script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+	<h1>Course Prerequisites Graph</h1>
+	<h3>CS499: Computer Science Capstone</h3>
+	<div id="mynetwork"></div>
+	<script type="text/javascript">
+		var container = document.getElementById('mynetwork');
+		var data = {{ data | safe }};
+		var options = {
+            nodes: {
+                color: 'red',
+                shape: 'box', // set the shape of the nodes to box
+                label: 'course_Id', // set the label to course_Id
+                title: 'full_title' // set the title to full_title
+            },
+            interaction: {
+                dragNodes: false,
+                dragView: false,
+                hover: true
+            },
+            edges: {
+                color: 'blue'
+            },
+			layout: {
+                improvedLayout: true,
+				hierarchical: {
+					direction: 'UD',
+            		sortMethod: 'directed'
+				}
+			}
+		};
+		var network = new vis.Network(container, data, options);
+	</script>
+</body>
+</html>
