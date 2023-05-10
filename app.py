@@ -3,9 +3,7 @@ from course_tree_generator import create_course_tree
 from database import get_course_info, get_courses_info
 from typing import Union, Tuple, Dict
 from flask_cors import CORS
-import plotly.graph_objs as go
 import requests
-import networkx as nx
 import json
 
 app = Flask(__name__)
@@ -61,85 +59,6 @@ def course_graph():
                     <button type="submit">Submit</button>
                 </form>
             '''
-
-@app.route('/network-graph2')
-def network_graph2():
-    response = requests.get('http://localhost:5000/course-tree/CS499')
-    data = response.json()
-
-    graph = nx.DiGraph()
-
-    def create_graph(course, graph):
-        node = {"id": course["course_id"], "name": course["name"], "title": course["course_id"]}
-        graph.add_node(node["id"], name=node["name"], title=node["title"])
-        if "prerequisites" in course:
-            for prereq in course["prerequisites"]:
-                prereq_node = {"id": prereq["course_id"], "name": prereq["name"], "title": prereq["course_id"]}
-                graph.add_node(prereq_node["id"], name=prereq_node["name"], title=prereq_node["title"])
-                graph.add_edge(prereq_node["id"], node["id"])
-                create_graph(prereq, graph)
-
-    create_graph(data, graph)
-
-    # Compute the positions of each node
-    pos = nx.layout.kamada_kawai_layout(graph, scale=2, center=(0,0))
-
-    edge_x = []
-    edge_y = []
-    for edge in graph.edges():
-        x0, y0 = pos[edge[0]]
-        x1, y1 = pos[edge[1]]
-        edge_x.extend([x0, x1, None])
-        edge_y.extend([y0, y1, None])
-
-    node_x = []
-    node_y = []
-    node_names = []
-    node_titles = []
-    for node in graph.nodes():
-        x, y = pos[node]
-        node_x.append(x)
-        node_y.append(y)
-        node_names.append(graph.nodes[node]['name'])
-        node_titles.append(graph.nodes[node]['title'])
-
-    node_trace = go.Scatter(
-        x=node_x, y=node_y,
-        mode='markers+text',
-        text=node_names,
-        hoverinfo='text',
-        textposition='bottom center',
-        marker=dict(
-            showscale=False,
-            color=[],
-            size=20,
-            symbol='circle',
-            line_width=2))
-
-    node_trace.text = node_titles
-
-    fig = go.Figure(data=[node_trace, go.Scatter(x=edge_x, y=edge_y, line=dict(width=0.5, color='#888'), hoverinfo='none', mode='lines')],
-                layout=go.Layout(
-                    title='Course Prerequisites',
-                    showlegend=False,
-                    hovermode='closest',
-                    margin=dict(b=20,l=5,r=5,t=40),
-                    annotations=[ dict(
-                        text="Course Prerequisites",
-                        showarrow=False,
-                        xref="paper", yref="paper",
-                        x=0.005, y=-0.002 ) ],
-                    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)))
-
-    fig.update_layout(plot_bgcolor='white')
-
-    # Convert the plotly graph to HTML
-    fig.write_html("courses_graph.html")
-    plot_html = fig.to_html(full_html=False)
-
-    # Render the HTML template with the graph
-    return render_template('network-graph.html', plot_html=plot_html)
 
 @app.route('/course-trees/<course_ids>')
 def get_course_trees(course_ids):
