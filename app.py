@@ -16,7 +16,8 @@ def format_data(data):
     def traverse(node, parent=None):
         nodes.append({
             'id': node['course_id'],
-            'label': node['course_id'] + ': ' + node['name']
+            'label': node['course_id'],
+            'title': node['name']
         })
         if parent:
             edges.append({'from': parent, 'to': node['course_id']})
@@ -27,19 +28,19 @@ def format_data(data):
     traverse(data)
     return {'nodes': nodes, 'edges': edges}
 
-@app.route('/course-graph', methods=['GET', 'POST'])
+
+@app.route('/', methods=['GET', 'POST'])
 def course_graph():
     if request.method == 'POST':
         # Get course name from form data
         course_name = request.form['course_name']
-        print(course_name)
         # Validate course name against database
         course_info = get_course_info(course_name)
-        print(course_info)
         if course_info:
             # Make API call to get latest data
-            response = requests.get(f'http://localhost:5000/course-tree/{course_name}')
-            data = response.json()
+            data = create_course_tree(course_name)
+            
+            print("DATA: {0} TYPE: {1}".format(data, type(data)))
 
             # Format data for vis.js consumption
             vis_data = format_data(data)

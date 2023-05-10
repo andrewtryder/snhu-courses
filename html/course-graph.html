@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Course Graph</title>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet">
+  <style>
+    #mynetwork {
+      height: 800px;
+      border: 1px solid lightgray;
+    }
+  </style>
+</head>
+<body>
+  <h1>Course Graph: {{ course_name }}</h1>
+  <div id="mynetwork"></div>
+  <script type="text/javascript">
+    var nodes = new vis.DataSet({{ data['nodes']|safe }});
+    var edges = new vis.DataSet({{ data['edges']|safe }});
+    var container = document.getElementById('mynetwork');
+    var data = {
+      nodes: nodes,
+      edges: edges
+    };
+    var options = {
+      edges: {
+        arrows: {
+          to: true
+        },
+        smooth: {
+          enabled: true,
+          type: 'continuous'
+        }
+      }
+    };
+    var network = new vis.Network(container, data, options);
+  </script>
+</body>
+</html>
