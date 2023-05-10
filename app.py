@@ -6,7 +6,7 @@ from flask_cors import CORS
 import requests
 import json
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 CORS(app)
 
 def format_data(data):
@@ -39,27 +39,17 @@ def course_graph():
         if course_info:
             # Make API call to get latest data
             data = create_course_tree(course_name)
-            
-            print("DATA: {0} TYPE: {1}".format(data, type(data)))
-
             # Format data for vis.js consumption
             vis_data = format_data(data)
 
             # Render graph onto webpage
             return render_template('course-graph.html', data=json.dumps(vis_data))
-
         else:
             # Invalid course name, render error page
             return redirect(url_for('course_graph'))
     else:
         # Show form to ask for course name
-        return '''
-                <form method="post">
-                    <label for="course_name">Course Name:</label>
-                    <input type="text" id="course_name" name="course_name">
-                    <button type="submit">Submit</button>
-                </form>
-            '''
+        return render_template('index.html')
 
 @app.route('/course-trees/<course_ids>')
 def get_course_trees(course_ids):
