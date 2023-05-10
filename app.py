@@ -43,10 +43,10 @@ def course_graph():
             vis_data = format_data(data)
 
             # Render graph onto webpage
-            return render_template('course-graph.html', data=json.dumps(vis_data))
+            return render_template('index.html', course_name=course_name, graph=render_template('course-graph.html', data=json.dumps(vis_data)))
         else:
             # Invalid course name, render error page
-            return redirect(url_for('course_graph'))
+            return render_template('index.html', error='Invalid course name.')
     else:
         # Show form to ask for course name
         return render_template('index.html')
