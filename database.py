@@ -10,7 +10,6 @@ def get_course_info(course_id: str) -> Tuple:
             WHERE catalog_course_id = ?
         """, (course_id,))
         result = cursor.fetchone()
-        print("FETCHONE: {0}".format(result))
     return result
 
 def get_courses_info(course_ids: List[str]) -> List[Dict[str, Any]]:
