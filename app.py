@@ -3,8 +3,9 @@ from course_tree_generator import create_course_tree
 from database import get_course_info, get_courses_info
 from typing import Union, Tuple, Dict
 from flask_cors import CORS
-import requests
 import json
+import random
+import re
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app)
@@ -12,20 +13,37 @@ CORS(app)
 def format_data(data, node_ids, edge_ids):
     nodes = []
     edges = []
+    prefix_colors = {}  # Dictionary to map prefixes to colors
+
+    def generate_color():
+        primary_colors = ['#FF0000', '#00FF00', '#0000FF']  # Red, Green, Blue
+        return random.choice(primary_colors)
+
+    def extract_prefix(course_id):
+        prefix_match = re.match(r'^([A-Za-z]+)', course_id)
+        if prefix_match:
+            return prefix_match.group(0)
+        return None
 
     def traverse(node, parent=None):
         node_id = node['course_id']
         if node_id not in node_ids:
-            # Add node to list of nodes if it hasn't been added already
-            nodes.append({
-                'id': node_id,
-                'label': node_id,
-                'title': node['name']
-            })
-            node_ids.add(node_id)
+            prefix = extract_prefix(node_id)
+            if prefix:
+                if prefix not in prefix_colors:
+                    prefix_colors[prefix] = generate_color()
+
+                color = prefix_colors[prefix]
+
+                nodes.append({
+                    'id': node_id,
+                    'label': node_id,
+                    'title': node['name'],
+                    'color': color
+                })
+                node_ids.add(node_id)
 
         if parent and (parent, node_id) not in edge_ids:
-            # Add edge to list of edges if it hasn't been added already
             edges.append({'from': parent, 'to': node_id})
             edge_ids.add((parent, node_id))
 
