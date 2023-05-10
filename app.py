@@ -4,7 +4,6 @@ from database import get_course_info, get_courses_info
 from typing import Union, Tuple, Dict
 from flask_cors import CORS
 import plotly.graph_objs as go
-from plotly.subplots import make_subplots
 import requests
 import networkx as nx
 import json
