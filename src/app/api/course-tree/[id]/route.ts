@@ -7,7 +7,14 @@ export async function GET(
 ) {
     const resolvedParams = await params;
     const id = resolvedParams.id.toUpperCase();
-    const client = await db.connect();
+
+    let client;
+    try {
+        client = await db.connect();
+    } catch (e) {
+        console.error("Database connection error:", e);
+        return NextResponse.json({ error: "Failed to connect to the database. Ensure POSTGRES_URL is set." }, { status: 500 });
+    }
 
     try {
         const tree = await createCourseTree(client, id);
@@ -20,7 +27,9 @@ export async function GET(
         console.error("Error generating course tree", e);
         return NextResponse.json({ error: String(e) }, { status: 500 });
     } finally {
-        client.release();
+        if (client) {
+            client.release();
+        }
     }
 }
 
