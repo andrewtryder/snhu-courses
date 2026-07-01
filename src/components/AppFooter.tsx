@@ -1,14 +1,25 @@
+import { formatLastUpdated, lastUpdated } from '@/lib/site';
+
 export function AppFooter() {
     return (
         <footer aria-label="Footer" className="mt-auto border-t border-surface-variant bg-surface-container-low">
-            <div className="mx-auto flex w-full max-w-[var(--spacing-container-max)] flex-col items-center justify-between gap-4 px-4 py-4 md:flex-row md:px-8">
-                <div className="order-2 md:order-1">
-                    <p className="text-center text-sm text-on-surface-variant md:text-left">
-                        <span className="font-bold text-on-surface">Disclaimer:</span>{' '}
-                        Unofficial SNHU Site. All data is for informational purposes only and not guaranteed.
-                    </p>
-                </div>
-                <nav aria-label="Footer navigation" className="order-1 flex gap-6 text-xs font-medium tracking-wide md:order-2">
+            <div className="mx-auto grid w-full max-w-[var(--spacing-container-max)] grid-cols-1 items-center gap-4 px-4 py-4 md:grid-cols-3 md:px-8">
+                <p className="text-center text-sm text-on-surface-variant md:text-left">
+                    {lastUpdated ? (
+                        <>
+                            <span className="font-bold text-on-surface">Updated:</span>{' '}
+                            {formatLastUpdated(lastUpdated)}
+                        </>
+                    ) : null}
+                </p>
+                <p className="text-center text-sm text-on-surface-variant">
+                    <span className="font-bold text-on-surface">Disclaimer:</span>{' '}
+                    Unofficial SNHU site. All data is provided for informational purposes only.
+                </p>
+                <nav
+                    aria-label="Footer navigation"
+                    className="flex justify-center gap-6 text-xs font-medium tracking-wide md:justify-end"
+                >
                     <a
                         href="https://github.com/andrewtryder/snhu-courses"
                         target="_blank"
