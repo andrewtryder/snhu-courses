@@ -2,7 +2,13 @@ import { db } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  const client = await db.connect();
+  let client;
+  try {
+      client = await db.connect();
+  } catch (e) {
+      console.error("Database connection error:", e);
+      return NextResponse.json({ error: "Failed to connect to the database. Ensure POSTGRES_URL is set." }, { status: 500 });
+  }
 
   try {
     // Drop existing tables for fresh initialization if needed (comment out in production)
@@ -65,6 +71,8 @@ export async function GET() {
       { status: 500 }
     );
   } finally {
-    client.release();
+    if (client) {
+        client.release();
+    }
   }
 }
