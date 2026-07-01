@@ -52,16 +52,16 @@ export function CourseSearchInput({
 
     const activeToken = getActiveToken(value);
     const isHeader = variant === 'header';
+    const visibleSuggestions = activeToken.length < 1 ? [] : suggestions;
+    const dropdownOpen = isOpen && activeToken.length >= 1;
+    const visibleSearchError = activeToken.length < 1 ? null : searchError;
     const activeDescendantId =
-        highlightedIndex >= 0 && suggestions[highlightedIndex]
-            ? optionId(listboxId, suggestions[highlightedIndex].catalog_course_id)
+        highlightedIndex >= 0 && visibleSuggestions[highlightedIndex]
+            ? optionId(listboxId, visibleSuggestions[highlightedIndex].catalog_course_id)
             : undefined;
 
     useEffect(() => {
         if (activeToken.length < 1) {
-            setSuggestions([]);
-            setIsOpen(false);
-            setSearchError(null);
             return;
         }
 
@@ -146,19 +146,19 @@ export function CourseSearchInput({
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (!isOpen || suggestions.length === 0) {
+        if (!dropdownOpen || visibleSuggestions.length === 0) {
             return;
         }
 
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setHighlightedIndex((prev) => (prev + 1) % suggestions.length);
+            setHighlightedIndex((prev) => (prev + 1) % visibleSuggestions.length);
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            setHighlightedIndex((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
+            setHighlightedIndex((prev) => (prev <= 0 ? visibleSuggestions.length - 1 : prev - 1));
         } else if (e.key === 'Enter' && highlightedIndex >= 0) {
             e.preventDefault();
-            selectSuggestion(suggestions[highlightedIndex]);
+            selectSuggestion(visibleSuggestions[highlightedIndex]);
         } else if (e.key === 'Escape') {
             setIsOpen(false);
         }
@@ -172,12 +172,16 @@ export function CourseSearchInput({
                     ref={inputRef}
                     type="text"
                     role="combobox"
-                    aria-label="Search SNHU courses"
-                    aria-expanded={isOpen}
+                    aria-label="Search SNHU courses by course ID"
+                    aria-expanded={dropdownOpen}
                     aria-autocomplete="list"
                     aria-controls={listboxId}
                     aria-activedescendant={activeDescendantId}
-                    placeholder={isHeader ? 'Search courses...' : 'Search courses (e.g., CS250, ACC201)...'}
+                    placeholder={
+                        isHeader
+                            ? 'Search by course ID (e.g. CS499)'
+                            : 'Search by course ID (e.g. CS499, ACC201)'
+                    }
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     onFocus={() => {
@@ -206,29 +210,29 @@ export function CourseSearchInput({
                     <Loader2 className="absolute right-3 h-4 w-4 animate-spin text-outline" aria-hidden="true" />
                 )}
 
-                {isOpen && (
+                {dropdownOpen && (
                     <ul
                         id={listboxId}
                         role="listbox"
                         aria-label="Course suggestions"
                         className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-lg border border-surface-variant bg-surface-container-lowest shadow-lg"
                     >
-                        {isSearching && suggestions.length === 0 && (
+                        {isSearching && visibleSuggestions.length === 0 && (
                             <li role="status" className="px-3 py-2 text-sm text-on-surface-variant">
                                 Searching...
                             </li>
                         )}
-                        {searchError && (
+                        {visibleSearchError && (
                             <li role="alert" className="px-3 py-2 text-sm text-on-error-container">
-                                {searchError}
+                                {visibleSearchError}
                             </li>
                         )}
-                        {!isSearching && !searchError && suggestions.length === 0 && (
+                        {!isSearching && !visibleSearchError && visibleSuggestions.length === 0 && (
                             <li role="status" className="px-3 py-2 text-sm text-on-surface-variant">
                                 No matching courses
                             </li>
                         )}
-                        {suggestions.map((suggestion, index) => (
+                        {visibleSuggestions.map((suggestion, index) => (
                             <li
                                 key={suggestion.catalog_course_id}
                                 id={optionId(listboxId, suggestion.catalog_course_id)}

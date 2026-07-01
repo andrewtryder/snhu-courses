@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SNHU Course Prerequisites Tool
 
-## Getting Started
+An unofficial course planning tool for Southern New Hampshire University students.
 
-First, run the development server:
+The SNHU Course Prerequisites Tool helps students search for SNHU courses and visualize prerequisite dependency relationships as an interactive flowchart. It is designed to make it easier to understand which courses may need to come before others while planning a degree path.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Why This Exists
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+I built this site as a proud SNHU graduate who knows how important course planning can be, especially when transfer credits, prerequisites, and heavy course loads are involved.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+During my time at Southern New Hampshire University, I often needed a clearer way to understand which courses depended on others. Because I transferred in several credits and wanted to make the most of each term, knowing prerequisite relationships helped me plan more confidently and avoid surprises.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This tool was designed to help SNHU students visualize course dependencies as they move through their programs. Search for a course to see the classes that may need to come before it, then use that information as a planning aid while mapping out your degree path.
 
-## Learn More
+## Disclaimer
 
-To learn more about Next.js, take a look at the following resources:
+This site is unofficial and is intended for informational purposes only.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Course requirements, transfer evaluations, catalog rules, and program requirements can change. Always confirm your academic plan with your SNHU advisor for official guidance.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Related Project
 
-## Deploy on Vercel
+I also built [SNHU Transfers](https://snhu-transfers.vercel.app), another tool for SNHU students that makes it easier to explore how certifications may transfer in as credits.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Features
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Search SNHU courses by course ID or title
+- Generate prerequisite dependency graphs for one or more courses
+- Visualize prerequisite relationships with an interactive flowchart
+- Validate entered course IDs before generating a graph
+- Display course titles alongside course IDs
+- Provide accessible search, status, error, footer, and modal UI patterns
+- Include basic SEO support through metadata, `robots.txt`, and `sitemap.xml`
+
+## Tech Stack
+
+- [Next.js](https://nextjs.org/) App Router
+- [React](https://react.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [React Flow](https://reactflow.dev/) for graph rendering
+- [Dagre](https://github.com/dagrejs/dagre) for graph layout
+- [Vercel Postgres](https://vercel.com/docs/storage/vercel-postgres) for course and prerequisite data
+- [Vercel Analytics](https://vercel.com/docs/analytics) for analytics
+- [Lucide React](https://lucide.dev/) for icons
+
+## Architecture Overview
+
+This project is a Next.js application hosted on Vercel.
+
+At a high level, the app is organized around a client-side search and visualization experience backed by server-side API routes:
+
+```text
+src/
+  app/
+    api/
+      courses/
+        route.ts
+      courses/search/
+        route.ts
+      course-tree/[id]/
+        route.ts
+      course-trees/[ids]/
+        route.ts
+    layout.tsx
+    page.tsx
+    robots.ts
+    sitemap.ts
+
+  components/
+    AppFooter.tsx
+    AppHeader.tsx
+    AboutModal.tsx
+    CourseSearchInput.tsx
+
+  lib/
+    courseGraphLayout.tsx
+    site.ts

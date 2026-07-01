@@ -28,8 +28,7 @@ export async function GET(request: Request) {
         const result = await client.sql`
             SELECT catalog_course_id, title
             FROM courses_data
-            WHERE catalog_course_id ILIKE ${prefixPattern}
-               OR title ILIKE ${containsPattern}
+            WHERE catalog_course_id ILIKE ${containsPattern}
             ORDER BY
                 CASE WHEN catalog_course_id ILIKE ${prefixPattern} THEN 0 ELSE 1 END,
                 catalog_course_id

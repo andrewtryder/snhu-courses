@@ -1,35 +1,64 @@
+import Link from 'next/link';
 import { CourseSearchInput } from '@/components/CourseSearchInput';
 
 interface AppHeaderProps {
-    courseQuery: string;
-    onChange: (value: string) => void;
-    onSubmit: (courseIds: string[]) => void;
+    courseQuery?: string;
+    onChange?: (value: string) => void;
+    onSubmit?: (courseIds: string[]) => void;
     isLoading?: boolean;
+    showSearch?: boolean;
+    currentPage?: 'home' | 'about' | 'course';
 }
 
-export function AppHeader({ courseQuery, onChange, onSubmit, isLoading }: AppHeaderProps) {
+export function AppHeader({
+    courseQuery = '',
+    onChange = () => {},
+    onSubmit = () => {},
+    isLoading,
+    showSearch = true,
+    currentPage = 'home',
+}: AppHeaderProps) {
     return (
         <header className="sticky top-0 z-20 border-b border-surface-variant bg-surface">
             <div className="mx-auto flex h-16 w-full max-w-[var(--spacing-container-max)] items-center gap-4 px-4 md:px-8">
-                <div className="flex shrink-0 items-center gap-6">
-                    <a
+                <div className="flex shrink-0 items-center gap-4">
+                    <Link
                         href="/"
-                        className="font-[family-name:var(--font-headline)] text-xl font-bold text-primary transition-opacity hover:opacity-80"
+                        className="inline-flex items-baseline gap-2 rounded-lg border border-surface-variant bg-surface-container-low px-3 py-2 no-underline transition-colors hover:border-primary hover:bg-surface-container"
                         aria-label="SNHU Course Prerequisites Tool home"
                     >
-                        SNHU
-                    </a>
-                    <nav aria-label="Primary" className="hidden h-full items-center md:flex">
-                        <span
-                            aria-current="page"
-                            className="flex h-full items-center border-b-2 border-primary pb-1 text-sm font-semibold tracking-wide text-primary opacity-80"
-                        >
+                        <span className="font-[family-name:var(--font-headline)] text-lg font-bold leading-none text-primary">
+                            SNHU
+                        </span>
+                        <span className="font-[family-name:var(--font-headline)] text-sm font-semibold leading-none tracking-wide text-on-surface">
                             Course Prerequisites Tool
                         </span>
-                    </nav>
+                    </Link>
+                    {currentPage === 'about' && (
+                        <span
+                            aria-current="page"
+                            className="hidden text-sm font-semibold tracking-wide text-primary md:inline"
+                        >
+                            About
+                        </span>
+                    )}
                 </div>
 
-                <div className="hidden min-w-0 flex-1 md:flex md:px-6">
+                {showSearch && (
+                    <div className="hidden min-w-0 flex-1 md:flex md:px-6">
+                        <CourseSearchInput
+                            value={courseQuery}
+                            onChange={onChange}
+                            onSubmit={onSubmit}
+                            isLoading={isLoading}
+                            variant="header"
+                        />
+                    </div>
+                )}
+            </div>
+
+            {showSearch && (
+                <div className="border-t border-surface-variant px-4 pb-3 pt-3 md:hidden">
                     <CourseSearchInput
                         value={courseQuery}
                         onChange={onChange}
@@ -38,17 +67,7 @@ export function AppHeader({ courseQuery, onChange, onSubmit, isLoading }: AppHea
                         variant="header"
                     />
                 </div>
-            </div>
-
-            <div className="border-t border-surface-variant px-4 pb-3 pt-3 md:hidden">
-                <CourseSearchInput
-                    value={courseQuery}
-                    onChange={onChange}
-                    onSubmit={onSubmit}
-                    isLoading={isLoading}
-                    variant="header"
-                />
-            </div>
+            )}
         </header>
     );
 }

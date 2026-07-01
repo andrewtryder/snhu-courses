@@ -33,9 +33,6 @@ export const metadata: Metadata = {
     "course dependency graph",
     "prerequisite flowchart",
   ],
-  alternates: {
-    canonical: "/",
-  },
   openGraph: {
     title,
     description,
