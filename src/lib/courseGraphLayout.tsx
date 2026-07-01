@@ -1,5 +1,5 @@
 import dagre from '@dagrejs/dagre';
-import type { Edge, Node } from '@xyflow/react';
+import { MarkerType, type Edge, type Node } from '@xyflow/react';
 import type { ReactNode } from 'react';
 
 export interface CourseTree {
@@ -9,7 +9,7 @@ export interface CourseTree {
 }
 
 const NODE_WIDTH = 150;
-const NODE_HEIGHT = 70;
+const NODE_HEIGHT = 76;
 
 interface SubjectPalette {
     bg: string;
@@ -33,7 +33,13 @@ function buildCourseLabel(courseId: string, name: string, palette: SubjectPalett
     return (
         <div className="text-center font-bold">
             <div className="text-sm" style={{ color: palette.courseId }}>{courseId}</div>
-            <div className="text-xs font-normal leading-snug" style={{ color: palette.name }}>{name}</div>
+            <div
+                className="text-xs font-normal leading-snug line-clamp-2"
+                style={{ color: palette.name }}
+                title={name}
+            >
+                {name}
+            </div>
         </div>
     );
 }
@@ -81,11 +87,12 @@ function buildGraphElements(dataArray: CourseTree[]): { nodes: Node[]; edges: Ed
             if (!edgeIds.has(edgeId)) {
                 edges.push({
                     id: edgeId,
-                    source: parent,
-                    target: nodeId,
+                    source: nodeId,
+                    target: parent,
                     type: 'smoothstep',
                     animated: true,
                     style: { stroke: '#747683', strokeWidth: 2 },
+                    markerEnd: { type: MarkerType.ArrowClosed, color: '#747683' },
                 });
                 edgeIds.add(edgeId);
             }

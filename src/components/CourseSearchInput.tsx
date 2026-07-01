@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
 
 interface CourseSuggestion {
@@ -30,6 +30,10 @@ function replaceActiveToken(value: string, replacement: string): { nextValue: st
     return { nextValue: `${prefix} ${replacement}`, isFirstCourse: false };
 }
 
+function optionId(listboxId: string, courseId: string): string {
+    return `${listboxId}-option-${courseId.replace(/[^a-zA-Z0-9-]/g, '-')}`;
+}
+
 export function CourseSearchInput({
     value,
     onChange,
@@ -43,9 +47,14 @@ export function CourseSearchInput({
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const listboxId = useId();
 
     const activeToken = getActiveToken(value);
     const isHeader = variant === 'header';
+    const activeDescendantId =
+        highlightedIndex >= 0 && suggestions[highlightedIndex]
+            ? optionId(listboxId, suggestions[highlightedIndex].catalog_course_id)
+            : undefined;
 
     useEffect(() => {
         if (activeToken.length < 1) {
@@ -59,7 +68,7 @@ export function CourseSearchInput({
             setIsSearching(true);
             try {
                 const response = await fetch(
-                    `/api/courses/search?q=${encodeURIComponent(activeToken)}&limit=10`,
+                    `/api/courses/search?q=${encodeURIComponent(activeToken)}&limit=25`,
                     { signal: controller.signal }
                 );
                 if (!response.ok) {
@@ -148,14 +157,16 @@ export function CourseSearchInput({
     return (
         <form onSubmit={handleSubmit} className={isHeader ? 'w-full' : 'flex-1 max-w-xl mx-4'}>
             <div ref={containerRef} className="relative flex items-center">
-                <Search className="absolute left-3 z-10 h-5 w-5 text-outline" />
+                <Search className="absolute left-3 z-10 h-5 w-5 text-outline" aria-hidden="true" />
                 <input
                     ref={inputRef}
                     type="text"
                     role="combobox"
+                    aria-label="Search SNHU courses"
                     aria-expanded={isOpen}
                     aria-autocomplete="list"
-                    aria-controls="course-suggestions"
+                    aria-controls={listboxId}
+                    aria-activedescendant={activeDescendantId}
                     placeholder={isHeader ? 'Search courses...' : 'Search courses (e.g., CS250, ACC201)...'}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
@@ -175,30 +186,37 @@ export function CourseSearchInput({
                     <button
                         type="submit"
                         disabled={isLoading || !value.trim()}
+                        aria-label={isLoading ? 'Searching courses' : 'Search courses'}
                         className="absolute right-2 rounded-md bg-secondary-container px-3 py-1 text-sm font-semibold text-on-secondary-container transition-colors hover:bg-secondary disabled:opacity-50"
                     >
-                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : 'Search'}
                     </button>
                 )}
                 {isHeader && isLoading && (
-                    <Loader2 className="absolute right-3 h-4 w-4 animate-spin text-outline" />
+                    <Loader2 className="absolute right-3 h-4 w-4 animate-spin text-outline" aria-hidden="true" />
                 )}
 
                 {isOpen && (
                     <ul
-                        id="course-suggestions"
+                        id={listboxId}
                         role="listbox"
+                        aria-label="Course suggestions"
                         className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-lg border border-surface-variant bg-surface-container-lowest shadow-lg"
                     >
                         {isSearching && suggestions.length === 0 && (
-                            <li className="px-3 py-2 text-sm text-on-surface-variant">Searching...</li>
+                            <li role="status" className="px-3 py-2 text-sm text-on-surface-variant">
+                                Searching...
+                            </li>
                         )}
                         {!isSearching && suggestions.length === 0 && (
-                            <li className="px-3 py-2 text-sm text-on-surface-variant">No matching courses</li>
+                            <li role="status" className="px-3 py-2 text-sm text-on-surface-variant">
+                                No matching courses
+                            </li>
                         )}
                         {suggestions.map((suggestion, index) => (
                             <li
                                 key={suggestion.catalog_course_id}
+                                id={optionId(listboxId, suggestion.catalog_course_id)}
                                 role="option"
                                 aria-selected={index === highlightedIndex}
                                 onMouseDown={(e) => e.preventDefault()}
