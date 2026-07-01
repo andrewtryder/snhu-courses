@@ -44,6 +44,7 @@ export function CourseSearchInput({
     const [suggestions, setSuggestions] = useState<CourseSuggestion[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -60,28 +61,37 @@ export function CourseSearchInput({
         if (activeToken.length < 1) {
             setSuggestions([]);
             setIsOpen(false);
+            setSearchError(null);
             return;
         }
 
         const controller = new AbortController();
         const timeout = setTimeout(async () => {
             setIsSearching(true);
+            setIsOpen(true);
+            setSearchError(null);
             try {
                 const response = await fetch(
                     `/api/courses/search?q=${encodeURIComponent(activeToken)}&limit=25`,
                     { signal: controller.signal }
                 );
                 if (!response.ok) {
+                    const errData = await response.json().catch(() => null);
                     setSuggestions([]);
+                    setSearchError(
+                        typeof errData?.error === 'string'
+                            ? errData.error
+                            : 'Course search is temporarily unavailable.'
+                    );
                     return;
                 }
                 const data: CourseSuggestion[] = await response.json();
                 setSuggestions(data);
-                setIsOpen(data.length > 0);
                 setHighlightedIndex(-1);
             } catch (err) {
                 if ((err as Error).name !== 'AbortError') {
                     setSuggestions([]);
+                    setSearchError('Course search is temporarily unavailable.');
                 }
             } finally {
                 setIsSearching(false);
@@ -208,7 +218,12 @@ export function CourseSearchInput({
                                 Searching...
                             </li>
                         )}
-                        {!isSearching && suggestions.length === 0 && (
+                        {searchError && (
+                            <li role="alert" className="px-3 py-2 text-sm text-on-error-container">
+                                {searchError}
+                            </li>
+                        )}
+                        {!isSearching && !searchError && suggestions.length === 0 && (
                             <li role="status" className="px-3 py-2 text-sm text-on-surface-variant">
                                 No matching courses
                             </li>
