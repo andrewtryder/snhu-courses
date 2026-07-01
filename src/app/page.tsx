@@ -13,13 +13,9 @@ import {
     Connection
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Search, Loader2 } from 'lucide-react';
-
-interface CourseNode {
-    course_id: string;
-    name: string;
-    prerequisites?: CourseNode[];
-}
+import { Search } from 'lucide-react';
+import { layoutCourseGraph, type CourseTree } from '@/lib/courseGraphLayout';
+import { CourseSearchInput } from '@/components/CourseSearchInput';
 
 export default function Home() {
     const [courseQuery, setCourseQuery] = useState('');
@@ -34,99 +30,32 @@ export default function Home() {
         [setEdges]
     );
 
-    const primaryColors = [
-        '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF',
-        '#00FFFF', '#FF8000', '#008000', '#000080', '#800080',
-        '#FFC0CB', '#800000', '#008080', '#808000', '#C0C0C0',
-    ];
-
-    const generateGraph = (dataArray: CourseNode[]) => {
-        const newNodes: Node[] = [];
-        const newEdges: Edge[] = [];
-        const nodeIds = new Set<string>();
-        const edgeIds = new Set<string>();
-        const prefixColors: Record<string, string> = {};
-
-        // simple layout algorithm
-        let currentX = 0;
-
-        dataArray.forEach((courseTree) => {
-            const traverse = (node: CourseNode, parent: string | null = null, depth: number = 0, xOffset: number = 0) => {
-                const nodeId = node.course_id;
-
-                if (!nodeIds.has(nodeId)) {
-                    const prefixMatch = nodeId.match(/^([A-Za-z]+)/);
-                    const prefix = prefixMatch ? prefixMatch[0] : 'DEFAULT';
-
-                    if (!prefixColors[prefix]) {
-                        prefixColors[prefix] = primaryColors[Object.keys(prefixColors).length % primaryColors.length];
-                    }
-
-                    const color = prefixColors[prefix];
-
-                    newNodes.push({
-                        id: nodeId,
-                        position: { x: currentX + xOffset, y: depth * 150 },
-                        data: {
-                            label: (
-                                <div className="text-center font-bold">
-                                    <div className="text-sm">{nodeId}</div>
-                                    <div className="text-xs font-normal text-gray-700">{node.name}</div>
-                                </div>
-                            )
-                        },
-                        style: {
-                            background: `${color}20`,
-                            border: `2px solid ${color}`,
-                            borderRadius: '8px',
-                            padding: '10px',
-                            width: 150,
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-                        }
-                    });
-                    nodeIds.add(nodeId);
-                    xOffset += 180;
-                }
-
-                if (parent) {
-                    const edgeId = `${parent}-${nodeId}`;
-                    if (!edgeIds.has(edgeId)) {
-                        newEdges.push({
-                            id: edgeId,
-                            source: parent,
-                            target: nodeId,
-                            type: 'smoothstep',
-                            animated: true,
-                        });
-                        edgeIds.add(edgeId);
-                    }
-                }
-
-                if (node.prerequisites && node.prerequisites.length > 0) {
-                    node.prerequisites.forEach((child: CourseNode, idx: number) => {
-                        traverse(child, nodeId, depth + 1, idx * 180);
-                    });
-                }
-            };
-
-            traverse(courseTree, null, 0, currentX);
-            currentX += 500; // Shift root nodes apart
-        });
-
-        setNodes(newNodes);
-        setEdges(newEdges);
+    const generateGraph = (dataArray: CourseTree[]) => {
+        const { nodes: layoutedNodes, edges: layoutedEdges } = layoutCourseGraph(dataArray);
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
     };
 
-    const handleSearch = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!courseQuery.trim()) return;
-
+    const handleSearch = async (courseIds: string[]) => {
         setIsLoading(true);
         setError(null);
         setHasSearched(true);
 
         try {
-            const courseIds = courseQuery.split(',').map(id => id.trim().toUpperCase());
+            const validateResponse = await fetch(`/api/courses?ids=${courseIds.join(',')}`);
+            if (validateResponse.ok) {
+                const found: { catalog_course_id: string }[] = await validateResponse.json();
+                const foundIds = new Set(
+                    found.map((course) => course.catalog_course_id.toUpperCase())
+                );
+                const invalidIds = courseIds.filter((id) => !foundIds.has(id));
+                if (invalidIds.length > 0) {
+                    throw new Error(
+                        `Unknown course${invalidIds.length > 1 ? 's' : ''}: ${invalidIds.join(', ')}`
+                    );
+                }
+            }
+
             const response = await fetch(`/api/course-trees/${courseIds.join(',')}`);
 
             if (!response.ok) {
@@ -159,25 +88,12 @@ export default function Home() {
                     <h1 className="text-xl font-bold text-slate-800">Course Prerequisites</h1>
                 </div>
 
-                <form onSubmit={handleSearch} className="flex-1 max-w-xl mx-4">
-                    <div className="relative flex items-center">
-                        <Search className="absolute left-3 text-slate-400 w-5 h-5" />
-                        <input
-                            type="text"
-                            placeholder="Enter course IDs (e.g., CS250, ACC201)..."
-                            value={courseQuery}
-                            onChange={(e) => setCourseQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900"
-                        />
-                        <button
-                            type="submit"
-                            disabled={isLoading || !courseQuery.trim()}
-                            className="absolute right-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
-                        >
-                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Search'}
-                        </button>
-                    </div>
-                </form>
+                <CourseSearchInput
+                    value={courseQuery}
+                    onChange={setCourseQuery}
+                    onSubmit={handleSearch}
+                    isLoading={isLoading}
+                />
 
                 <div className="text-sm text-slate-500 hidden md:block">
                     Separate multiple courses with commas
@@ -207,7 +123,9 @@ export default function Home() {
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
+                        nodesDraggable={false}
                         fitView
+                        fitViewOptions={{ padding: 0.2 }}
                         attributionPosition="bottom-right"
                     >
                         <Background color="#ccc" gap={16} />

@@ -48,9 +48,9 @@ export async function GET() {
 
         console.log(`Found ${courses.length} courses.`);
 
-        // Let's only do the first 50 to avoid timeout for the demo script
+        // Fetch more courses to include CS, IT, etc. (first 1500 instead of 50)
         // In real world, this might be a background job
-        const courseSubset = courses.slice(0, 50);
+        const courseSubset = courses.slice(0, 1500);
 
         for (const data of courseSubset) {
             const course_id = data.__catalogCourseId;
@@ -98,13 +98,19 @@ export async function GET() {
             let credits = 0;
             const credits_data = details.credits;
             if (credits_data) {
-                const credits_value = credits_data.value;
-                if (credits_value) {
-                    if (credits_value.min !== undefined) credits = credits_value.min;
-                    else credits = credits_value;
-                } else {
-                    if (credits_data.credits && credits_data.credits.min !== undefined) credits = credits_data.credits.min;
-                    else if (credits_data.min !== undefined) credits = credits_data.min;
+                try {
+                    const credits_value = credits_data.value;
+                    if (credits_value !== undefined && credits_value !== null) {
+                        // Handle both numbers and strings (e.g., "1.5")
+                        credits = Math.round(parseFloat(String(credits_value)) || 0);
+                    } else if (credits_data.credits && credits_data.credits.min !== undefined) {
+                        credits = Math.round(parseFloat(String(credits_data.credits.min)) || 0);
+                    } else if (credits_data.min !== undefined) {
+                        credits = Math.round(parseFloat(String(credits_data.min)) || 0);
+                    }
+                } catch (e) {
+                    console.error('Error parsing credits:', e, credits_data);
+                    credits = 0;
                 }
             }
 

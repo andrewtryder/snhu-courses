@@ -44,7 +44,7 @@ export async function GET() {
         catalog_course_id TEXT,
         description TEXT,
         academic_level TEXT,
-        credits INTEGER,
+        credits REAL,
         date_start TEXT,
         online_offering BOOLEAN,
         campus_offering BOOLEAN,

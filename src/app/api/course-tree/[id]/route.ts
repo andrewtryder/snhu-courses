@@ -73,9 +73,14 @@ async function createCourseTree(client: any, course_id: string, seenCourses: Set
 
     const courseName = await getCourseName(client, course_id);
 
+    // If course doesn't exist in database, return null to signal not found
+    if (courseName === "Unknown") {
+        return null;
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const courseDict: any = {
-        name: courseName || "Unknown",
+        name: courseName,
         course_id: course_id
     };
 
