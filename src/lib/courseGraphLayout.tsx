@@ -19,14 +19,14 @@ interface SubjectPalette {
 }
 
 const SUBJECT_PALETTES: SubjectPalette[] = [
-    { bg: '#EFF6FF', border: '#3B82F6', courseId: '#1E40AF', name: '#334155' },
-    { bg: '#F0FDF4', border: '#16A34A', courseId: '#166534', name: '#334155' },
-    { bg: '#FFF7ED', border: '#EA580C', courseId: '#9A3412', name: '#334155' },
-    { bg: '#FDF4FF', border: '#A855F7', courseId: '#6B21A8', name: '#334155' },
-    { bg: '#FEF2F2', border: '#DC2626', courseId: '#991B1B', name: '#334155' },
-    { bg: '#ECFEFF', border: '#0891B2', courseId: '#155E75', name: '#334155' },
-    { bg: '#FEFCE8', border: '#CA8A04', courseId: '#854D0E', name: '#334155' },
-    { bg: '#F8FAFC', border: '#64748B', courseId: '#1E293B', name: '#475569' },
+    { bg: '#dbe1ff', border: '#003087', courseId: '#001d59', name: '#444652' },
+    { bg: '#dae2ff', border: '#2c6cf0', courseId: '#001849', name: '#444652' },
+    { bg: '#f0eded', border: '#747683', courseId: '#1b1c1c', name: '#444652' },
+    { bg: '#e8f5e9', border: '#004112', courseId: '#002908', name: '#444652' },
+    { bg: '#ffdad6', border: '#ba1a1a', courseId: '#93000a', name: '#444652' },
+    { bg: '#f6f3f2', border: '#0053cf', courseId: '#001d59', name: '#444652' },
+    { bg: '#eae8e7', border: '#3959b0', courseId: '#1c4197', name: '#444652' },
+    { bg: '#fefcff', border: '#747683', courseId: '#303030', name: '#475569' },
 ];
 
 function buildCourseLabel(courseId: string, name: string, palette: SubjectPalette): ReactNode {
@@ -85,7 +85,7 @@ function buildGraphElements(dataArray: CourseTree[]): { nodes: Node[]; edges: Ed
                     target: nodeId,
                     type: 'smoothstep',
                     animated: true,
-                    style: { stroke: '#64748B', strokeWidth: 2 },
+                    style: { stroke: '#747683', strokeWidth: 2 },
                 });
                 edgeIds.add(edgeId);
             }

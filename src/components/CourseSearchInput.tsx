@@ -13,6 +13,7 @@ interface CourseSearchInputProps {
     onChange: (value: string) => void;
     onSubmit: (courseIds: string[]) => void;
     isLoading?: boolean;
+    variant?: 'header' | 'default';
 }
 
 function getActiveToken(value: string): string {
@@ -34,6 +35,7 @@ export function CourseSearchInput({
     onChange,
     onSubmit,
     isLoading = false,
+    variant = 'default',
 }: CourseSearchInputProps) {
     const [suggestions, setSuggestions] = useState<CourseSuggestion[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -43,6 +45,7 @@ export function CourseSearchInput({
     const inputRef = useRef<HTMLInputElement>(null);
 
     const activeToken = getActiveToken(value);
+    const isHeader = variant === 'header';
 
     useEffect(() => {
         if (activeToken.length < 1) {
@@ -143,9 +146,9 @@ export function CourseSearchInput({
     };
 
     return (
-        <form onSubmit={handleSubmit} className="flex-1 max-w-xl mx-4">
+        <form onSubmit={handleSubmit} className={isHeader ? 'w-full' : 'flex-1 max-w-xl mx-4'}>
             <div ref={containerRef} className="relative flex items-center">
-                <Search className="absolute left-3 text-slate-400 w-5 h-5 z-10" />
+                <Search className="absolute left-3 z-10 h-5 w-5 text-outline" />
                 <input
                     ref={inputRef}
                     type="text"
@@ -153,7 +156,7 @@ export function CourseSearchInput({
                     aria-expanded={isOpen}
                     aria-autocomplete="list"
                     aria-controls="course-suggestions"
-                    placeholder="Search courses (e.g., CS250, ACC201)..."
+                    placeholder={isHeader ? 'Search courses...' : 'Search courses (e.g., CS250, ACC201)...'}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     onFocus={() => {
@@ -162,27 +165,36 @@ export function CourseSearchInput({
                         }
                     }}
                     onKeyDown={handleKeyDown}
-                    className="w-full pl-10 pr-24 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900"
+                    className={
+                        isHeader
+                            ? 'w-full rounded-full border border-outline-variant bg-surface-container-low py-2 pl-10 pr-4 text-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant focus:border-primary focus:ring-1 focus:ring-primary'
+                            : 'w-full rounded-full border border-outline-variant bg-surface-container-low py-2 pl-10 pr-24 text-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant focus:border-primary focus:ring-1 focus:ring-primary'
+                    }
                 />
-                <button
-                    type="submit"
-                    disabled={isLoading || !value.trim()}
-                    className="absolute right-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
-                >
-                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Search'}
-                </button>
+                {!isHeader && (
+                    <button
+                        type="submit"
+                        disabled={isLoading || !value.trim()}
+                        className="absolute right-2 rounded-md bg-secondary-container px-3 py-1 text-sm font-semibold text-on-secondary-container transition-colors hover:bg-secondary disabled:opacity-50"
+                    >
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+                    </button>
+                )}
+                {isHeader && isLoading && (
+                    <Loader2 className="absolute right-3 h-4 w-4 animate-spin text-outline" />
+                )}
 
                 {isOpen && (
                     <ul
                         id="course-suggestions"
                         role="listbox"
-                        className="absolute left-0 right-0 top-full mt-1 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg z-50"
+                        className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-lg border border-surface-variant bg-surface-container-lowest shadow-lg"
                     >
                         {isSearching && suggestions.length === 0 && (
-                            <li className="px-3 py-2 text-sm text-slate-500">Searching...</li>
+                            <li className="px-3 py-2 text-sm text-on-surface-variant">Searching...</li>
                         )}
                         {!isSearching && suggestions.length === 0 && (
-                            <li className="px-3 py-2 text-sm text-slate-500">No matching courses</li>
+                            <li className="px-3 py-2 text-sm text-on-surface-variant">No matching courses</li>
                         )}
                         {suggestions.map((suggestion, index) => (
                             <li
@@ -194,12 +206,12 @@ export function CourseSearchInput({
                                 onMouseEnter={() => setHighlightedIndex(index)}
                                 className={`cursor-pointer px-3 py-2 text-sm ${
                                     index === highlightedIndex
-                                        ? 'bg-blue-50 text-blue-900'
-                                        : 'text-slate-800 hover:bg-slate-50'
+                                        ? 'bg-primary-fixed text-primary'
+                                        : 'text-on-surface hover:bg-surface-container-low'
                                 }`}
                             >
                                 <span className="font-semibold">{suggestion.catalog_course_id}</span>
-                                <span className="text-slate-500"> — {suggestion.title}</span>
+                                <span className="text-on-surface-variant"> — {suggestion.title}</span>
                             </li>
                         ))}
                     </ul>

@@ -13,9 +13,10 @@ import {
     Connection
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Search } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import { layoutCourseGraph, type CourseTree } from '@/lib/courseGraphLayout';
-import { CourseSearchInput } from '@/components/CourseSearchInput';
+import { AppHeader } from '@/components/AppHeader';
+import { AppFooter } from '@/components/AppFooter';
 
 export default function Home() {
     const [courseQuery, setCourseQuery] = useState('');
@@ -78,61 +79,105 @@ export default function Home() {
         }
     };
 
+    const showEmptyState = !hasSearched && nodes.length === 0 && !error;
+    const showGraph = hasSearched && !error;
+
     return (
-        <main className="flex flex-col h-screen w-full bg-slate-50 font-sans">
-            <header className="bg-white border-b border-slate-200 p-4 shadow-sm z-10 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="bg-blue-600 text-white p-2 rounded-lg font-bold">
-                        SNHU
-                    </div>
-                    <h1 className="text-xl font-bold text-slate-800">Course Prerequisites</h1>
-                </div>
+        <div className="flex min-h-screen flex-col">
+            <AppHeader
+                courseQuery={courseQuery}
+                onChange={setCourseQuery}
+                onSubmit={handleSearch}
+                isLoading={isLoading}
+            />
 
-                <CourseSearchInput
-                    value={courseQuery}
-                    onChange={setCourseQuery}
-                    onSubmit={handleSearch}
-                    isLoading={isLoading}
-                />
+            <main className="mx-auto flex w-full max-w-[var(--spacing-container-max)] flex-1 flex-col px-4 py-4 md:px-8 md:py-6 min-h-0">
+                <div className="relative flex flex-1 flex-col overflow-hidden rounded-lg border border-surface-variant bg-surface-container-lowest min-h-0">
+                    <div
+                        className="pointer-events-none absolute inset-0 opacity-[0.03]"
+                        style={{
+                            backgroundImage: 'radial-gradient(circle at 50% 50%, #003087 0%, transparent 50%)',
+                        }}
+                    />
 
-                <div className="text-sm text-slate-500 hidden md:block">
-                    Separate multiple courses with commas
-                </div>
-            </header>
-
-            <div className="flex-1 w-full relative h-full">
-                {error ? (
-                    <div className="absolute inset-0 flex items-center justify-center p-4">
-                        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-sm flex flex-col items-center max-w-md text-center">
-                            <span className="font-bold text-lg mb-1">Error</span>
-                            <span>{error}</span>
+                    {error ? (
+                        <div className="relative z-10 flex flex-1 items-center justify-center p-6 md:p-8">
+                            <div className="flex max-w-md flex-col items-center rounded-lg border border-error-container bg-error-container px-6 py-4 text-center">
+                                <span className="mb-1 font-[family-name:var(--font-headline)] text-lg font-semibold text-on-error-container">
+                                    Error
+                                </span>
+                                <span className="text-sm text-on-error-container">{error}</span>
+                            </div>
                         </div>
-                    </div>
-                ) : !hasSearched && nodes.length === 0 ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-                        <Search className="w-16 h-16 mb-4 text-slate-300" />
-                        <h2 className="text-2xl font-bold text-slate-500 mb-2">Search for a Course</h2>
-                        <p className="text-center max-w-md">
-                            Enter one or more course codes (like CS250 or ACC201) in the search bar above to generate interactive prerequisite trees.
-                        </p>
-                    </div>
-                ) : (
-                    <ReactFlow
-                        nodes={nodes}
-                        edges={edges}
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
-                        onConnect={onConnect}
-                        nodesDraggable={false}
-                        fitView
-                        fitViewOptions={{ padding: 0.2 }}
-                        attributionPosition="bottom-right"
-                    >
-                        <Background color="#ccc" gap={16} />
-                        <Controls />
-                    </ReactFlow>
-                )}
-            </div>
-        </main>
+                    ) : showEmptyState ? (
+                        <div className="relative z-10 flex flex-1 flex-col items-center justify-center p-6 text-center md:p-8">
+                            <div className="mb-6 max-w-md">
+                                <h1 className="mb-2 font-[family-name:var(--font-headline)] text-2xl font-semibold text-primary">
+                                    Course Prerequisites Tool
+                                </h1>
+                                <p className="text-sm text-on-surface-variant">
+                                    Map out your degree path and understand required preliminary courses.
+                                </p>
+                            </div>
+
+                            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-surface-variant bg-surface-container-low shadow-sm transition-all hover:border-primary-fixed hover:shadow-md">
+                                <GitBranch className="h-8 w-8 text-outline" />
+                            </div>
+
+                            <h2 className="mb-2 font-[family-name:var(--font-headline)] text-xl font-semibold text-on-surface">
+                                Prerequisites Flowchart Canvas
+                            </h2>
+                            <p className="max-w-md text-sm text-on-surface-variant">
+                                Select a program or search for a specific course to generate its prerequisite dependency graph.
+                            </p>
+
+                            <div className="pointer-events-none absolute left-10 top-10 hidden opacity-20 md:block">
+                                <div className="flex h-12 w-24 items-center justify-center rounded border-2 border-outline text-xs font-medium text-outline">
+                                    IT-140
+                                </div>
+                                <div className="relative mx-auto my-2 h-16 w-0.5 bg-outline">
+                                    <div className="absolute bottom-0 left-1/2 h-2 w-2 -translate-x-1/2 translate-y-1/2 rotate-45 border-b-2 border-r-2 border-outline" />
+                                </div>
+                                <div className="flex h-12 w-24 items-center justify-center rounded border-2 border-outline text-xs font-medium text-outline">
+                                    CS-210
+                                </div>
+                            </div>
+
+                            <div className="pointer-events-none absolute bottom-10 right-10 hidden opacity-20 md:block">
+                                <div className="flex h-12 w-24 items-center justify-center rounded border-2 border-outline text-xs font-medium text-outline">
+                                    MAT-136
+                                </div>
+                                <div className="relative mx-auto my-2 h-16 w-0.5 bg-outline">
+                                    <div className="absolute bottom-0 left-1/2 h-2 w-2 -translate-x-1/2 translate-y-1/2 rotate-45 border-b-2 border-r-2 border-outline" />
+                                </div>
+                                <div className="flex h-12 w-24 items-center justify-center rounded border-2 border-outline text-xs font-medium text-outline">
+                                    CS-250
+                                </div>
+                            </div>
+                        </div>
+                    ) : showGraph ? (
+                        <div className="absolute inset-0 z-10">
+                            <ReactFlow
+                                nodes={nodes}
+                                edges={edges}
+                                onNodesChange={onNodesChange}
+                                onEdgesChange={onEdgesChange}
+                                onConnect={onConnect}
+                                nodesDraggable={false}
+                                fitView
+                                fitViewOptions={{ padding: 0.2 }}
+                                attributionPosition="bottom-right"
+                                className="bg-surface-container-lowest"
+                            >
+                                <Background color="#e4e2e1" gap={16} />
+                                <Controls className="!border-surface-variant !bg-surface-container-lowest !shadow-sm" />
+                            </ReactFlow>
+                        </div>
+                    ) : null}
+                </div>
+            </main>
+
+            <AppFooter />
+        </div>
     );
 }
