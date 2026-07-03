@@ -24,13 +24,14 @@ export function AppFooter() {
                         href="https://github.com/andrewtryder/snhu-courses"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-on-surface-variant transition-colors hover:text-primary"
+                        className="text-on-surface-variant transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low rounded-sm"
                     >
                         Source Code
+                        <span className="sr-only"> (opens in a new tab)</span>
                     </a>
                     <a
                         href="/about"
-                        className="text-on-surface-variant transition-colors hover:text-primary"
+                        className="text-on-surface-variant transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low rounded-sm"
                     >
                         About
                     </a>

@@ -167,6 +167,12 @@ export function CourseSearchInput({
     return (
         <form onSubmit={handleSubmit} className={isHeader ? 'w-full' : 'flex-1 max-w-xl mx-4'}>
             <div ref={containerRef} className="relative flex items-center">
+                <div className="sr-only" aria-live="polite" aria-atomic="true">
+                    {isSearching ? 'Searching...' :
+                     visibleSearchError ? visibleSearchError :
+                     (dropdownOpen && !isSearching && visibleSuggestions.length === 0) ? 'No matching courses found.' :
+                     (dropdownOpen && visibleSuggestions.length > 0) ? `${visibleSuggestions.length} suggestions available. Use up and down arrows to navigate.` : ''}
+                </div>
                 <Search className="absolute left-3 z-10 h-5 w-5 text-outline" aria-hidden="true" />
                 <input
                     ref={inputRef}
@@ -192,8 +198,8 @@ export function CourseSearchInput({
                     onKeyDown={handleKeyDown}
                     className={
                         isHeader
-                            ? 'w-full rounded-full border border-outline-variant bg-surface-container-low py-2 pl-10 pr-4 text-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant focus:border-primary focus:ring-1 focus:ring-primary'
-                            : 'w-full rounded-full border border-outline-variant bg-surface-container-low py-2 pl-10 pr-24 text-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant focus:border-primary focus:ring-1 focus:ring-primary'
+                            ? 'w-full rounded-full border border-outline-variant bg-surface-container-low py-2 pl-10 pr-4 text-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus:border-primary'
+                            : 'w-full rounded-full border border-outline-variant bg-surface-container-low py-2 pl-10 pr-24 text-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface focus:border-primary'
                     }
                 />
                 {!isHeader && (
@@ -201,7 +207,7 @@ export function CourseSearchInput({
                         type="submit"
                         disabled={isLoading || !value.trim()}
                         aria-label={isLoading ? 'Searching courses' : 'Search courses'}
-                        className="absolute right-2 rounded-md bg-secondary-container px-3 py-1 text-sm font-semibold text-on-secondary-container transition-colors hover:bg-secondary disabled:opacity-50"
+                        className="absolute right-2 rounded-md bg-secondary-container px-3 py-1 text-sm font-semibold text-on-secondary-container transition-colors hover:bg-secondary disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                     >
                         {isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : 'Search'}
                     </button>
