@@ -24,7 +24,7 @@ export function AppHeader({
                 <div className="flex shrink-0 items-center gap-4">
                     <Link
                         href="/"
-                        className="inline-flex items-baseline gap-2 rounded-lg border border-surface-variant bg-surface-container-low px-3 py-2 no-underline transition-colors hover:border-primary hover:bg-surface-container"
+                        className="inline-flex items-baseline gap-2 rounded-lg border border-surface-variant bg-surface-container-low px-3 py-2 no-underline transition-colors hover:border-primary hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
                         aria-label="SNHU Course Prerequisites Tool home"
                     >
                         <span className="font-[family-name:var(--font-headline)] text-lg font-bold leading-none text-primary">

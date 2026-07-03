@@ -54,7 +54,7 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
                     type="button"
                     onClick={onClose}
                     aria-label="Close"
-                    className="absolute right-4 top-4 rounded-md p-1 text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface"
+                    className="absolute right-4 top-4 rounded-md p-1 text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest"
                 >
                     <X className="h-5 w-5" aria-hidden="true" />
                 </button>
@@ -96,9 +96,10 @@ export function AboutModal({ isOpen, onClose }: AboutModalProps) {
                             href="https://snhu-transfers.vercel.app"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-on-surface-variant transition-colors hover:text-primary"
+                            className="font-medium text-on-surface-variant transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-lowest rounded-sm"
                         >
                             SNHU Transfers
+                            <span className="sr-only"> (opens in a new tab)</span>
                         </a>
                         . It makes it easier to explore how certifications may transfer in as credits.
                     </p>
