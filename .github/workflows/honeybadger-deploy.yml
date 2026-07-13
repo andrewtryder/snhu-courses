@@ -1,0 +1,29 @@
+name: Notify Honeybadger of production deployment
+
+on:
+  status:
+
+permissions:
+  contents: read
+
+jobs:
+  notify-honeybadger:
+    if: >-
+      github.event.state == 'success' &&
+      github.event.context == 'Vercel' &&
+      contains(github.event.branches.*.name, 'master')
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out deployed revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.sha }}
+          fetch-depth: 0
+
+      - name: Record Honeybadger deployment
+        uses: honeybadger-io/github-notify-deploy-action@v1
+        with:
+          api_key: ${{ secrets.HONEYBADGER_API_KEY }}
+          environment: production
