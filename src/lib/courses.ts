@@ -89,7 +89,8 @@ export async function createCourseTree(
     const childTrees: CourseTree[] = [];
     for (const prereqId of prerequisites) {
         if (prereqId !== courseId) {
-            const childDict = await createCourseTree(client, prereqId, seenCourses);
+            // Clone per branch so diamond-shared prerequisites remain under sibling edges.
+            const childDict = await createCourseTree(client, prereqId, new Set(seenCourses));
             if (childDict) {
                 childTrees.push(childDict);
             }
@@ -106,6 +107,28 @@ export async function createCourseTree(
 export async function getCourseTree(courseId: string): Promise<CourseTree | null> {
     const id = courseId.toUpperCase();
     return withDbClient((client) => createCourseTree(client, id));
+}
+
+export interface CourseTreeResult {
+    id: string;
+    tree: CourseTree | null;
+}
+
+/** Load multiple course trees using a single DB client (fresh seen-set per root). */
+export async function getCourseTrees(courseIds: string[]): Promise<CourseTreeResult[]> {
+    if (courseIds.length === 0) {
+        return [];
+    }
+
+    return withDbClient(async (client) => {
+        const results: CourseTreeResult[] = [];
+        for (const courseId of courseIds) {
+            const id = courseId.toUpperCase();
+            const tree = await createCourseTree(client, id);
+            results.push({ id, tree });
+        }
+        return results;
+    });
 }
 
 /**

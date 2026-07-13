@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q')?.trim() ?? '';
-    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '10', 10), 1), 25);
+    const parsedLimit = parseInt(searchParams.get('limit') ?? '10', 10);
+    const limit = Math.min(Math.max(Number.isFinite(parsedLimit) ? parsedLimit : 10, 1), 25);
 
     if (query.length < 1) {
         return NextResponse.json([]);

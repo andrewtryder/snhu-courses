@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppHeader } from '@/components/AppHeader';
 
@@ -11,6 +11,16 @@ interface CourseSearchNavProps {
     onQueryChange?: (value: string) => void;
     onMultiCourseSearch?: (courseIds: string[]) => void | Promise<void>;
     isLoading?: boolean;
+}
+
+function coursePath(courseId: string): string {
+    return `/course/${encodeURIComponent(courseId)}`;
+}
+
+function homeIdsPath(courseIds: string[]): string {
+    const params = new URLSearchParams();
+    params.set('ids', courseIds.join(','));
+    return `/?${params.toString()}`;
 }
 
 export function CourseSearchNav({
@@ -28,6 +38,12 @@ export function CourseSearchNav({
     const courseQuery = controlledQuery ?? internalQuery;
     const isLoading = controlledLoading ?? internalLoading;
 
+    useEffect(() => {
+        return () => {
+            setInternalLoading(false);
+        };
+    }, []);
+
     const handleChange = (value: string) => {
         if (onQueryChange) {
             onQueryChange(value);
@@ -38,7 +54,7 @@ export function CourseSearchNav({
 
     const handleSearch = async (courseIds: string[]) => {
         if (courseIds.length === 1) {
-            router.push(`/course/${courseIds[0]}`);
+            router.push(coursePath(courseIds[0]));
             return;
         }
 
@@ -47,12 +63,9 @@ export function CourseSearchNav({
             return;
         }
 
+        // Keep loading until navigation completes / this component unmounts.
         setInternalLoading(true);
-        try {
-            router.push(`/?ids=${courseIds.join(',')}`);
-        } finally {
-            setInternalLoading(false);
-        }
+        await router.push(homeIdsPath(courseIds));
     };
 
     return (
