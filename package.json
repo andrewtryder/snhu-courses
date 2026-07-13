@@ -9,7 +9,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "catalog:bootstrap": "tsx scripts/catalog-bootstrap.ts",
+    "catalog:sync": "tsx scripts/catalog-sync.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
@@ -31,6 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }
