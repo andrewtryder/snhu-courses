@@ -45,6 +45,7 @@ export function CourseSearchInput({
     const [suggestions, setSuggestions] = useState<CourseSuggestion[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
     const [searchError, setSearchError] = useState<string | null>(null);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -54,15 +55,19 @@ export function CourseSearchInput({
     const activeToken = getActiveToken(value);
     const isHeader = variant === 'header';
     const visibleSuggestions = activeToken.length < 1 ? [] : suggestions;
-    const dropdownOpen = isOpen && activeToken.length >= 1;
+    const dropdownOpen = isOpen && isFocused && activeToken.length >= 1;
     const visibleSearchError = activeToken.length < 1 ? null : searchError;
     const activeDescendantId =
         highlightedIndex >= 0 && visibleSuggestions[highlightedIndex]
             ? optionId(listboxId, visibleSuggestions[highlightedIndex].catalog_course_id)
             : undefined;
 
+    // Only fetch/open suggestions while the user is actively focused in the input.
+    // Prefill from course-page navigation must not auto-activate the combobox.
     useEffect(() => {
-        if (activeToken.length < 1) {
+        if (!isFocused || activeToken.length < 1) {
+            setIsOpen(false);
+            setIsSearching(false);
             return;
         }
 
@@ -103,8 +108,7 @@ export function CourseSearchInput({
             clearTimeout(timeout);
             controller.abort();
         };
-    }, [activeToken]);
-
+    }, [activeToken, isFocused]);
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -124,6 +128,8 @@ export function CourseSearchInput({
             setSuggestions([]);
 
             if (isFirstCourse) {
+                setIsFocused(false);
+                inputRef.current?.blur();
                 onSubmit([normalizeCourseId(suggestion.catalog_course_id)]);
             } else {
                 inputRef.current?.focus();
@@ -143,6 +149,8 @@ export function CourseSearchInput({
             .filter(Boolean);
 
         if (courseIds.length > 0) {
+            setIsFocused(false);
+            inputRef.current?.blur();
             onSubmit(courseIds);
         }
     };
@@ -193,9 +201,14 @@ export function CourseSearchInput({
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                     onFocus={() => {
+                        setIsFocused(true);
                         if (suggestions.length > 0) {
                             setIsOpen(true);
                         }
+                    }}
+                    onBlur={() => {
+                        setIsFocused(false);
+                        setIsOpen(false);
                     }}
                     onKeyDown={handleKeyDown}
                     className={
