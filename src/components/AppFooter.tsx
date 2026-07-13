@@ -30,6 +30,12 @@ export function AppFooter() {
                         <span className="sr-only"> (opens in a new tab)</span>
                     </a>
                     <a
+                        href="/courses"
+                        className="text-on-surface-variant transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low rounded-sm"
+                    >
+                        Courses
+                    </a>
+                    <a
                         href="/about"
                         className="text-on-surface-variant transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface-container-low rounded-sm"
                     >

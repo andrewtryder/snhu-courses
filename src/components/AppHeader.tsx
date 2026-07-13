@@ -7,7 +7,7 @@ interface AppHeaderProps {
     onSubmit?: (courseIds: string[]) => void;
     isLoading?: boolean;
     showSearch?: boolean;
-    currentPage?: 'home' | 'about' | 'course';
+    currentPage?: 'home' | 'about' | 'course' | 'courses';
 }
 
 export function AppHeader({
@@ -40,6 +40,14 @@ export function AppHeader({
                             className="hidden text-sm font-semibold tracking-wide text-primary md:inline"
                         >
                             About
+                        </span>
+                    )}
+                    {currentPage === 'courses' && (
+                        <span
+                            aria-current="page"
+                            className="hidden text-sm font-semibold tracking-wide text-primary md:inline"
+                        >
+                            Directory
                         </span>
                     )}
                 </div>

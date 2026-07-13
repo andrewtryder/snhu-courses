@@ -11,6 +11,7 @@ import {
 } from '@/lib/courses';
 import { siteUrl } from '@/lib/site';
 import { serializeJsonLd } from '@/lib/safeJsonLd';
+import { buildCourseSummary } from '@/lib/courseSummary';
 import { AppFooter } from '@/components/AppFooter';
 import { CourseSearchNav } from '@/components/CourseSearchNav';
 import { CoursePrerequisiteGraph } from '@/components/CoursePrerequisiteGraph';
@@ -139,10 +140,12 @@ export default async function CoursePage({ params }: CoursePageProps) {
         directPrereqs
     );
 
-    const prereqSummaryText =
-        directPrereqs.length > 0
-            ? `Prerequisites include ${directPrereqs.join(', ')}.`
-            : 'No listed prerequisites for this course.';
+    const summaryText = buildCourseSummary({
+        courseId,
+        directPrerequisiteCount: directPrereqs.length,
+        totalPrerequisiteCount: allPrereqIds.length,
+        dependentCount: dependents.length,
+    });
 
     return (
         <div className="flex min-h-screen flex-col">
@@ -176,15 +179,7 @@ export default async function CoursePage({ params }: CoursePageProps) {
                                 Course Prerequisites Tool
                             </Link>
                             <span aria-hidden="true" className="mx-1.5 text-outline">·</span>
-                            {prereqSummaryText}
-                            {allPrereqIds.length > directPrereqs.length && (
-                                <>
-                                    {' '}
-                                    The full dependency tree includes{' '}
-                                    {allPrereqIds.length} related course
-                                    {allPrereqIds.length === 1 ? '' : 's'}.
-                                </>
-                            )}
+                            {summaryText}
                         </p>
                     </header>
 

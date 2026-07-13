@@ -170,6 +170,83 @@ export async function getAllCourseIds(): Promise<string[]> {
     }
 }
 
+export interface CourseSummary {
+    catalog_course_id: string;
+    title: string;
+}
+
+/**
+ * Fetches all course IDs and titles for the directory page in one query.
+ * Deduplicates by catalog_course_id (first wins). Returns [] when the DB is unavailable.
+ */
+export async function getAllCourseSummaries(): Promise<CourseSummary[]> {
+    try {
+        return await withDbClient(async (client) => {
+            const result = await client.sql`
+                SELECT catalog_course_id, title
+                FROM courses_data
+                WHERE catalog_course_id IS NOT NULL
+                ORDER BY catalog_course_id
+            `;
+
+            const seen = new Set<string>();
+            const summaries: CourseSummary[] = [];
+
+            for (const row of result.rows) {
+                const id = row.catalog_course_id as string;
+                if (!id || seen.has(id)) {
+                    continue;
+                }
+                seen.add(id);
+                summaries.push({
+                    catalog_course_id: id,
+                    title: (row.title as string) ?? '',
+                });
+            }
+
+            return summaries;
+        });
+    } catch (error) {
+        console.warn('Could not fetch course summaries for directory:', error);
+        return [];
+    }
+}
+
+/**
+ * Successful catalog sync timestamp from catalog_sync_state.completed_at.
+ * Returns null when unavailable, missing, or invalid — never throws for sitemap use.
+ */
+export async function getCatalogLastModified(): Promise<Date | null> {
+    try {
+        return await withDbClient(async (client) => {
+            const result = await client.sql`
+                SELECT completed_at
+                FROM catalog_sync_state
+                WHERE id = 'catalog'
+            `;
+
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            const raw = result.rows[0].completed_at;
+            if (raw == null) {
+                return null;
+            }
+
+            const date = raw instanceof Date ? raw : new Date(raw as string);
+            if (Number.isNaN(date.getTime())) {
+                return null;
+            }
+
+            return date;
+        });
+    } catch (error) {
+        console.warn('Could not fetch catalog last-modified timestamp:', error);
+        return null;
+    }
+}
+
 /** Direct prerequisite IDs for a course (excluding self). */
 export async function getDirectPrerequisiteIds(courseId: string): Promise<string[]> {
     const id = courseId.toUpperCase();

@@ -6,7 +6,7 @@ import { AppHeader } from '@/components/AppHeader';
 
 interface CourseSearchNavProps {
     initialQuery?: string;
-    currentPage?: 'home' | 'about' | 'course';
+    currentPage?: 'home' | 'about' | 'course' | 'courses';
     courseQuery?: string;
     onQueryChange?: (value: string) => void;
     onMultiCourseSearch?: (courseIds: string[]) => void | Promise<void>;
