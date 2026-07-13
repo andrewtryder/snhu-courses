@@ -1,3 +1,4 @@
+import './load-env';
 import { bootstrapCatalog } from '../src/lib/catalog-sync';
 
 async function main() {

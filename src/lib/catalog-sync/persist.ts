@@ -1,13 +1,16 @@
+import { randomUUID } from 'crypto';
 import type { VercelPoolClient } from '@vercel/postgres';
 import type { ParsedCourse } from './parse';
 
 export const CATALOG_SYNC_ID = 'catalog';
+const SYNC_ITEMS_INSERT_CHUNK = 500;
 
-export type SyncStatus = 'idle' | 'running';
+export type SyncStatus = 'awaiting_bootstrap' | 'idle' | 'running';
 
 export interface CatalogSyncState {
   id: string;
   status: SyncStatus;
+  sync_id: string | null;
   cursor: number;
   expected_count: number | null;
   imported_count: number;
@@ -18,11 +21,30 @@ export interface CatalogSyncState {
   last_error: string | null;
 }
 
+function mapSyncStateRow(row: Record<string, unknown>): CatalogSyncState {
+  return {
+    id: row.id as string,
+    status: row.status as SyncStatus,
+    sync_id: (row.sync_id as string) ?? null,
+    cursor: Number(row.cursor),
+    expected_count: row.expected_count === null || row.expected_count === undefined
+      ? null
+      : Number(row.expected_count),
+    imported_count: Number(row.imported_count),
+    started_at: row.started_at ? new Date(row.started_at as string) : null,
+    completed_at: row.completed_at ? new Date(row.completed_at as string) : null,
+    next_due_at: row.next_due_at ? new Date(row.next_due_at as string) : null,
+    lease_expires_at: row.lease_expires_at ? new Date(row.lease_expires_at as string) : null,
+    last_error: (row.last_error as string) ?? null,
+  };
+}
+
 export async function getSyncState(client: VercelPoolClient): Promise<CatalogSyncState> {
   const result = await client.sql`
     SELECT
       id,
       status,
+      sync_id,
       cursor,
       expected_count,
       imported_count,
@@ -39,23 +61,7 @@ export async function getSyncState(client: VercelPoolClient): Promise<CatalogSyn
     throw new Error('catalog_sync_state row missing; run db:migrate first');
   }
 
-  const row = result.rows[0];
-  return {
-    id: row.id as string,
-    status: row.status as SyncStatus,
-    cursor: Number(row.cursor),
-    expected_count: row.expected_count === null ? null : Number(row.expected_count),
-    imported_count: Number(row.imported_count),
-    started_at: row.started_at ? new Date(row.started_at as string) : null,
-    completed_at: row.completed_at ? new Date(row.completed_at as string) : null,
-    next_due_at: row.next_due_at ? new Date(row.next_due_at as string) : null,
-    lease_expires_at: row.lease_expires_at ? new Date(row.lease_expires_at as string) : null,
-    last_error: (row.last_error as string) ?? null,
-  };
-}
-
-export function isLeaseActive(state: CatalogSyncState, now = new Date()): boolean {
-  return state.lease_expires_at !== null && state.lease_expires_at > now;
+  return mapSyncStateRow(result.rows[0] as Record<string, unknown>);
 }
 
 export async function clearStaging(client: VercelPoolClient): Promise<void> {
@@ -63,17 +69,48 @@ export async function clearStaging(client: VercelPoolClient): Promise<void> {
   await client.sql`TRUNCATE prerequisites_stage, courses_data_stage, courses_stage`;
 }
 
+async function replaceSyncItems(
+  client: VercelPoolClient,
+  syncId: string,
+  pids: string[]
+): Promise<void> {
+  await client.sql`DELETE FROM catalog_sync_items`;
+
+  for (let offset = 0; offset < pids.length; offset += SYNC_ITEMS_INSERT_CHUNK) {
+    const chunk = pids.slice(offset, offset + SYNC_ITEMS_INSERT_CHUNK);
+    const ordinals = chunk.map((_, index) => offset + index);
+    await client.query(
+      `INSERT INTO catalog_sync_items (sync_id, ordinal, pid)
+       SELECT $1::uuid, t.ordinal, t.pid
+       FROM UNNEST($2::int[], $3::text[]) AS t(ordinal, pid)`,
+      [syncId, ordinals, chunk]
+    );
+  }
+}
+
+/**
+ * Start a refresh: clear staging, snapshot source pids into catalog_sync_items,
+ * and mark state running. Returns the new sync_id.
+ */
 export async function startRefresh(
   client: VercelPoolClient,
-  expectedCount: number
-): Promise<void> {
+  pids: string[]
+): Promise<string> {
+  if (pids.length === 0) {
+    throw new Error('Cannot start refresh with an empty source list');
+  }
+
+  const syncId = randomUUID();
   await clearStaging(client);
+  await replaceSyncItems(client, syncId, pids);
+
   await client.sql`
     UPDATE catalog_sync_state
     SET
       status = 'running',
+      sync_id = ${syncId},
       cursor = 0,
-      expected_count = ${expectedCount},
+      expected_count = ${pids.length},
       imported_count = 0,
       started_at = NOW(),
       completed_at = NULL,
@@ -81,14 +118,84 @@ export async function startRefresh(
       last_error = NULL
     WHERE id = ${CATALOG_SYNC_ID}
   `;
+
+  return syncId;
 }
 
-export async function refreshLease(client: VercelPoolClient): Promise<void> {
-  await client.sql`
-    UPDATE catalog_sync_state
-    SET lease_expires_at = NOW() + INTERVAL '5 minutes'
-    WHERE id = ${CATALOG_SYNC_ID}
+/** Read the next batch of pids from the immutable snapshot for this sync. */
+export async function getSyncItemsBatch(
+  client: VercelPoolClient,
+  syncId: string,
+  cursor: number,
+  limit: number
+): Promise<string[]> {
+  const result = await client.sql`
+    SELECT pid
+    FROM catalog_sync_items
+    WHERE sync_id = ${syncId}
+      AND ordinal >= ${cursor}
+    ORDER BY ordinal ASC
+    LIMIT ${limit}
   `;
+  return result.rows.map((row) => row.pid as string);
+}
+
+/**
+ * Atomically claim the catalog sync lease. Returns the updated state row on
+ * success, or null if another worker still holds an unexpired lease.
+ * When force is true (local ignoreLease), take the lease regardless of expiry.
+ */
+export async function tryClaimLease(
+  client: VercelPoolClient,
+  options: { force?: boolean } = {}
+): Promise<CatalogSyncState | null> {
+  const force = options.force ?? false;
+
+  const result = force
+    ? await client.sql`
+        UPDATE catalog_sync_state
+        SET lease_expires_at = NOW() + INTERVAL '5 minutes'
+        WHERE id = ${CATALOG_SYNC_ID}
+        RETURNING
+          id,
+          status,
+          sync_id,
+          cursor,
+          expected_count,
+          imported_count,
+          started_at,
+          completed_at,
+          next_due_at,
+          lease_expires_at,
+          last_error
+      `
+    : await client.sql`
+        UPDATE catalog_sync_state
+        SET lease_expires_at = NOW() + INTERVAL '5 minutes'
+        WHERE id = ${CATALOG_SYNC_ID}
+          AND (
+            lease_expires_at IS NULL
+            OR lease_expires_at <= NOW()
+          )
+        RETURNING
+          id,
+          status,
+          sync_id,
+          cursor,
+          expected_count,
+          imported_count,
+          started_at,
+          completed_at,
+          next_due_at,
+          lease_expires_at,
+          last_error
+      `;
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return mapSyncStateRow(result.rows[0] as Record<string, unknown>);
 }
 
 export async function setSyncError(client: VercelPoolClient, error: string): Promise<void> {
@@ -99,11 +206,18 @@ export async function setSyncError(client: VercelPoolClient, error: string): Pro
   `;
 }
 
+/**
+ * Abort a failed refresh. If bootstrap never completed (next_due_at still null),
+ * restore awaiting_bootstrap so cron cannot start the initial import.
+ */
 export async function abortToIdle(client: VercelPoolClient, error: string): Promise<void> {
   await client.sql`
     UPDATE catalog_sync_state
     SET
-      status = 'idle',
+      status = CASE
+        WHEN next_due_at IS NULL THEN 'awaiting_bootstrap'
+        ELSE 'idle'
+      END,
       lease_expires_at = NULL,
       last_error = ${error}
     WHERE id = ${CATALOG_SYNC_ID}

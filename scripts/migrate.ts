@@ -1,3 +1,4 @@
+import './load-env';
 import { db } from '@vercel/postgres';
 
 async function migrate() {
@@ -106,7 +107,8 @@ async function migrate() {
     await client.sql`
       CREATE TABLE IF NOT EXISTS catalog_sync_state (
         id TEXT PRIMARY KEY,
-        status TEXT NOT NULL DEFAULT 'idle',
+        status TEXT NOT NULL DEFAULT 'awaiting_bootstrap',
+        sync_id UUID,
         cursor INTEGER NOT NULL DEFAULT 0,
         expected_count INTEGER,
         imported_count INTEGER NOT NULL DEFAULT 0,
@@ -118,10 +120,49 @@ async function migrate() {
       );
     `;
 
+    // Additive column for databases created before sync_id existed.
+    await client.sql`
+      ALTER TABLE catalog_sync_state
+      ADD COLUMN IF NOT EXISTS sync_id UUID;
+    `;
+
+    // Immutable source snapshot for one catalog refresh (pid + ordinal).
+    await client.sql`
+      CREATE TABLE IF NOT EXISTS catalog_sync_items (
+        sync_id UUID NOT NULL,
+        ordinal INTEGER NOT NULL,
+        pid TEXT NOT NULL,
+        PRIMARY KEY (sync_id, ordinal),
+        UNIQUE (sync_id, pid)
+      );
+    `;
+
+    // Owned by snhu-transfers; created here so the shared DB has the matching shape.
+    await client.sql`
+      CREATE TABLE IF NOT EXISTS transfer_sync_items (
+        sync_id UUID NOT NULL,
+        ordinal INTEGER NOT NULL,
+        pid TEXT NOT NULL,
+        PRIMARY KEY (sync_id, ordinal),
+        UNIQUE (sync_id, pid)
+      );
+    `;
+
+    // Manual catalog:bootstrap must run before cron may refresh.
     await client.sql`
       INSERT INTO catalog_sync_state (id, status, cursor, imported_count)
-      VALUES ('catalog', 'idle', 0, 0)
+      VALUES ('catalog', 'awaiting_bootstrap', 0, 0)
       ON CONFLICT (id) DO NOTHING;
+    `;
+
+    // Heal rows created before awaiting_bootstrap existed (idle + never scheduled).
+    await client.sql`
+      UPDATE catalog_sync_state
+      SET status = 'awaiting_bootstrap'
+      WHERE id = 'catalog'
+        AND status = 'idle'
+        AND completed_at IS NULL
+        AND next_due_at IS NULL;
     `;
 
     // Stable read-only contract for other apps (e.g. snhu-transfers).

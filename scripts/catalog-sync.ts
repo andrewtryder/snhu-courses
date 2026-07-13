@@ -1,3 +1,4 @@
+import './load-env';
 import { runCatalogSyncBatch } from '../src/lib/catalog-sync';
 
 async function main() {
