@@ -77,7 +77,7 @@ function buildCourseJsonLd(
             ? ` Prerequisites include ${prerequisiteIds.join(', ')}.`
             : ' No listed prerequisites.';
 
-    return {
+    const courseSchema = {
         '@context': 'https://schema.org',
         '@type': 'Course',
         name: courseTitle,
@@ -93,6 +93,27 @@ function buildCourseJsonLd(
         },
         url: `${siteUrl}/course/${courseId}`,
     };
+
+    const breadcrumbSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+            {
+                '@type': 'ListItem',
+                position: 1,
+                name: 'Home',
+                item: siteUrl,
+            },
+            {
+                '@type': 'ListItem',
+                position: 2,
+                name: courseId,
+                item: `${siteUrl}/course/${courseId}`,
+            },
+        ],
+    };
+
+    return [courseSchema, breadcrumbSchema];
 }
 
 export default async function CoursePage({ params }: CoursePageProps) {

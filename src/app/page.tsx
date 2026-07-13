@@ -3,6 +3,8 @@ import { Suspense } from 'react';
 import { HomeClient } from '@/components/HomeClient';
 import { getCourseTrees } from '@/lib/courses';
 import { parseCourseIdList } from '@/lib/courseIds';
+import { serializeJsonLd } from '@/lib/safeJsonLd';
+import { siteUrl } from '@/lib/site';
 import type { CourseTree } from '@/lib/courseGraphLayout';
 
 export const metadata: Metadata = {
@@ -78,13 +80,33 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     const { trees: initialTrees, error: initialError, ids: normalizedIds } =
         await loadInitialTrees(ids);
 
+    const jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        url: siteUrl,
+        potentialAction: {
+            '@type': 'SearchAction',
+            target: {
+                '@type': 'EntryPoint',
+                urlTemplate: `${siteUrl}/?ids={search_term_string}`,
+            },
+            'query-input': 'required name=search_term_string',
+        },
+    };
+
     return (
-        <Suspense>
-            <HomeClient
-                initialIds={normalizedIds ?? ids}
-                initialTrees={initialTrees}
-                initialError={initialError}
+        <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
             />
-        </Suspense>
+            <Suspense>
+                <HomeClient
+                    initialIds={normalizedIds ?? ids}
+                    initialTrees={initialTrees}
+                    initialError={initialError}
+                />
+            </Suspense>
+        </>
     );
 }
