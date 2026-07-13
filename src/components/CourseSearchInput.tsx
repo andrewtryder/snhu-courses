@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
+import { normalizeCourseId } from '@/lib/courseIds';
 
 interface CourseSuggestion {
     catalog_course_id: string;
@@ -123,7 +124,7 @@ export function CourseSearchInput({
             setSuggestions([]);
 
             if (isFirstCourse) {
-                onSubmit([suggestion.catalog_course_id.toUpperCase()]);
+                onSubmit([normalizeCourseId(suggestion.catalog_course_id)]);
             } else {
                 inputRef.current?.focus();
             }
@@ -135,9 +136,10 @@ export function CourseSearchInput({
         e.preventDefault();
         setIsOpen(false);
 
+        // Normalize tokens but leave validation to the search handler so malformed IDs are reported.
         const courseIds = value
             .split(',')
-            .map((id) => id.trim().toUpperCase())
+            .map((id) => normalizeCourseId(id))
             .filter(Boolean);
 
         if (courseIds.length > 0) {
@@ -181,7 +183,7 @@ export function CourseSearchInput({
                     aria-label="Search SNHU courses by course ID"
                     aria-expanded={dropdownOpen}
                     aria-autocomplete="list"
-                    aria-controls={listboxId}
+                    aria-controls={visibleSuggestions.length > 0 ? listboxId : undefined}
                     aria-activedescendant={activeDescendantId}
                     placeholder={
                         isHeader
@@ -217,47 +219,50 @@ export function CourseSearchInput({
                 )}
 
                 {dropdownOpen && (
-                    <ul
-                        id={listboxId}
-                        role="listbox"
-                        aria-label="Course suggestions"
-                        className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-lg border border-surface-variant bg-surface-container-lowest shadow-lg"
-                    >
+                    <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-lg border border-surface-variant bg-surface-container-lowest shadow-lg">
                         {isSearching && visibleSuggestions.length === 0 && (
-                            <li role="status" className="px-3 py-2 text-sm text-on-surface-variant">
+                            <div role="status" className="px-3 py-2 text-sm text-on-surface-variant">
                                 Searching...
-                            </li>
+                            </div>
                         )}
                         {visibleSearchError && (
-                            <li role="alert" className="px-3 py-2 text-sm text-on-error-container">
+                            <div role="alert" className="px-3 py-2 text-sm text-on-error-container">
                                 {visibleSearchError}
-                            </li>
+                            </div>
                         )}
                         {!isSearching && !visibleSearchError && visibleSuggestions.length === 0 && (
-                            <li role="status" className="px-3 py-2 text-sm text-on-surface-variant">
+                            <div role="status" className="px-3 py-2 text-sm text-on-surface-variant">
                                 No matching courses
-                            </li>
+                            </div>
                         )}
-                        {visibleSuggestions.map((suggestion, index) => (
-                            <li
-                                key={suggestion.catalog_course_id}
-                                id={optionId(listboxId, suggestion.catalog_course_id)}
-                                role="option"
-                                aria-selected={index === highlightedIndex}
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => selectSuggestion(suggestion)}
-                                onMouseEnter={() => setHighlightedIndex(index)}
-                                className={`cursor-pointer px-3 py-2 text-sm ${
-                                    index === highlightedIndex
-                                        ? 'bg-primary-fixed text-primary'
-                                        : 'text-on-surface hover:bg-surface-container-low'
-                                }`}
+                        {visibleSuggestions.length > 0 && (
+                            <ul
+                                id={listboxId}
+                                role="listbox"
+                                aria-label="Course suggestions"
                             >
-                                <span className="font-semibold">{suggestion.catalog_course_id}</span>
-                                <span className="text-on-surface-variant"> — {suggestion.title}</span>
-                            </li>
-                        ))}
-                    </ul>
+                                {visibleSuggestions.map((suggestion, index) => (
+                                    <li
+                                        key={suggestion.catalog_course_id}
+                                        id={optionId(listboxId, suggestion.catalog_course_id)}
+                                        role="option"
+                                        aria-selected={index === highlightedIndex}
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => selectSuggestion(suggestion)}
+                                        onMouseEnter={() => setHighlightedIndex(index)}
+                                        className={`cursor-pointer px-3 py-2 text-sm ${
+                                            index === highlightedIndex
+                                                ? 'bg-primary-fixed text-primary'
+                                                : 'text-on-surface hover:bg-surface-container-low'
+                                        }`}
+                                    >
+                                        <span className="font-semibold">{suggestion.catalog_course_id}</span>
+                                        <span className="text-on-surface-variant"> — {suggestion.title}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
                 )}
             </div>
         </form>

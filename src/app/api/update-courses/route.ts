@@ -1,9 +1,11 @@
 import { db } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
+import * as cheerio from 'cheerio';
+import { isValidCourseId, normalizeCourseId } from '@/lib/courseIds';
 
 const KUALI_API_BASE = 'https://snhu.kuali.co/api/v1/catalog';
 
-async function fetchCourses(query = "") {
+async function fetchCourses(query = '') {
     const url = `${KUALI_API_BASE}/courses/6349a3f9164d00001c6c80da?q=${query}`;
     const response = await fetch(url);
     if (!response.ok) return null;
@@ -17,17 +19,76 @@ async function fetchCourseDetails(pid: string) {
     return response.json();
 }
 
-function extractPrerequisites(rulesHtml: string) {
-    const prerequisites: { course_id: string }[] = [];
-    if (!rulesHtml) return prerequisites;
+function extractPrerequisites(rulesHtml: string): string[] {
+    if (!rulesHtml) return [];
 
-    // Equivalent to python regex: <a href=".*?">(\w+)</a>
-    const regex = /<a href=".*?">(\w+)<\/a>/g;
-    let match;
-    while ((match = regex.exec(rulesHtml)) !== null) {
-        prerequisites.push({ course_id: match[1] });
-    }
+    const $ = cheerio.load(rulesHtml);
+    const seen = new Set<string>();
+    const prerequisites: string[] = [];
+
+    $('a').each((_, el) => {
+        const text = $(el).text();
+        const id = normalizeCourseId(text);
+        if (!isValidCourseId(id) || seen.has(id)) {
+            return;
+        }
+        seen.add(id);
+        prerequisites.push(id);
+    });
+
     return prerequisites;
+}
+
+function parseCredits(creditsData: unknown): number {
+    if (!creditsData || typeof creditsData !== 'object') {
+        return 0;
+    }
+
+    const data = creditsData as {
+        value?: unknown;
+        credits?: { min?: unknown };
+        min?: unknown;
+    };
+
+    try {
+        if (data.value !== undefined && data.value !== null) {
+            const n = parseFloat(String(data.value));
+            return Number.isFinite(n) ? n : 0;
+        }
+        if (data.credits?.min !== undefined) {
+            const n = parseFloat(String(data.credits.min));
+            return Number.isFinite(n) ? n : 0;
+        }
+        if (data.min !== undefined) {
+            const n = parseFloat(String(data.min));
+            return Number.isFinite(n) ? n : 0;
+        }
+    } catch (e) {
+        console.error('Error parsing credits:', e, creditsData);
+    }
+    return 0;
+}
+
+interface ParsedCourse {
+    course_id: string;
+    academic_level: string;
+    translated_level: string;
+    passed_catalog_query: string;
+    start_date: string;
+    online_offering: boolean;
+    campus_offering: boolean;
+    pid: string;
+    course_uuid: string;
+    title: string;
+    subject_code: string;
+    subject_description: string;
+    translated_subject: string;
+    subject_id: string;
+    activation_date: string;
+    score: number;
+    description: string;
+    credits: number;
+    prerequisites: string[];
 }
 
 export async function GET() {
@@ -35,23 +96,26 @@ export async function GET() {
     try {
         client = await db.connect();
     } catch (e) {
-        console.error("Database connection error:", e);
-        return NextResponse.json({ error: "Failed to connect to the database. Ensure POSTGRES_URL is set." }, { status: 500 });
+        console.error('Database connection error:', e);
+        return NextResponse.json(
+            { error: 'Failed to connect to the database. Ensure POSTGRES_URL is set.' },
+            { status: 500 }
+        );
     }
 
     try {
-        console.log("Fetching all courses...");
-        const courses = await fetchCourses("");
+        console.log('Fetching all courses...');
+        const courses = await fetchCourses('');
         if (!courses) {
-            return NextResponse.json({ error: "Failed to fetch courses" }, { status: 500 });
+            return NextResponse.json({ error: 'Failed to fetch courses' }, { status: 500 });
         }
 
         console.log(`Found ${courses.length} courses.`);
 
-        // Fetch more courses to include CS, IT, etc. (first 1500 instead of 50)
-        // In real world, this might be a background job
         const courseSubset = courses.slice(0, 1500);
+        const parsedCourses: ParsedCourse[] = [];
 
+        // Fetch and parse remote data outside transactions.
         for (const data of courseSubset) {
             const course_id = data.__catalogCourseId;
             const academic_level = data.academicLevel?.name || '';
@@ -76,70 +140,113 @@ export async function GET() {
             const activation_date = data.catalogActivationDate || '';
             const score = data._score || 0.0;
 
-            await client.sql`
-                INSERT INTO courses (
-                    course_id, academic_level, translated_level, passed_catalog_query, start_date,
-                    online_offering, campus_offering, pid, course_uuid, title, subject_code,
-                    subject_description, translated_subject, subject_id, activation_date, score
-                ) VALUES (
-                    ${course_id}, ${academic_level}, ${translated_level}, ${passed_catalog_query}, ${start_date},
-                    ${online_offering}, ${campus_offering}, ${pid}, ${course_uuid}, ${title}, ${subject_code},
-                    ${subject_description}, ${translated_subject}, ${subject_id}, ${activation_date}, ${score}
-                )
-                ON CONFLICT (pid) DO NOTHING;
-            `;
-
             console.log(`Fetching details for course ${pid}`);
             const details = await fetchCourseDetails(pid);
             if (!details) continue;
 
-            const prerequisites = extractPrerequisites(details.rulesPrerequisites);
+            parsedCourses.push({
+                course_id,
+                academic_level,
+                translated_level,
+                passed_catalog_query,
+                start_date,
+                online_offering,
+                campus_offering,
+                pid,
+                course_uuid,
+                title,
+                subject_code,
+                subject_description,
+                translated_subject,
+                subject_id,
+                activation_date,
+                score,
+                description: details.description || '',
+                credits: parseCredits(details.credits),
+                prerequisites: extractPrerequisites(details.rulesPrerequisites),
+            });
+        }
 
-            let credits = 0;
-            const credits_data = details.credits;
-            if (credits_data) {
-                try {
-                    const credits_value = credits_data.value;
-                    if (credits_value !== undefined && credits_value !== null) {
-                        // Handle both numbers and strings (e.g., "1.5")
-                        credits = Math.round(parseFloat(String(credits_value)) || 0);
-                    } else if (credits_data.credits && credits_data.credits.min !== undefined) {
-                        credits = Math.round(parseFloat(String(credits_data.credits.min)) || 0);
-                    } else if (credits_data.min !== undefined) {
-                        credits = Math.round(parseFloat(String(credits_data.min)) || 0);
-                    }
-                } catch (e) {
-                    console.error('Error parsing credits:', e, credits_data);
-                    credits = 0;
-                }
-            }
+        // Short per-course transactions: upsert course rows and replace prerequisites.
+        for (const course of parsedCourses) {
+            try {
+                await client.query('BEGIN');
 
-            const description = details.description || '';
-
-            await client.sql`
-                INSERT INTO courses_data (
-                    pid, title, catalog_course_id, description, academic_level,
-                    credits, date_start, online_offering, campus_offering, subject_code
-                ) VALUES (
-                    ${pid}, ${title}, ${course_id}, ${description}, ${academic_level},
-                    ${credits}, ${start_date}, ${online_offering}, ${campus_offering}, ${subject_code}
-                )
-                ON CONFLICT (pid) DO NOTHING;
-            `;
-
-            for (const prereq of prerequisites) {
                 await client.sql`
-                    INSERT INTO prerequisites (class_id, course_id)
-                    VALUES (${pid}, ${prereq.course_id})
-                    ON CONFLICT (class_id, course_id) DO NOTHING;
+                    INSERT INTO courses (
+                        course_id, academic_level, translated_level, passed_catalog_query, start_date,
+                        online_offering, campus_offering, pid, course_uuid, title, subject_code,
+                        subject_description, translated_subject, subject_id, activation_date, score
+                    ) VALUES (
+                        ${course.course_id}, ${course.academic_level}, ${course.translated_level},
+                        ${course.passed_catalog_query}, ${course.start_date},
+                        ${course.online_offering}, ${course.campus_offering}, ${course.pid},
+                        ${course.course_uuid}, ${course.title}, ${course.subject_code},
+                        ${course.subject_description}, ${course.translated_subject},
+                        ${course.subject_id}, ${course.activation_date}, ${course.score}
+                    )
+                    ON CONFLICT (pid) DO UPDATE SET
+                        course_id = EXCLUDED.course_id,
+                        academic_level = EXCLUDED.academic_level,
+                        translated_level = EXCLUDED.translated_level,
+                        passed_catalog_query = EXCLUDED.passed_catalog_query,
+                        start_date = EXCLUDED.start_date,
+                        online_offering = EXCLUDED.online_offering,
+                        campus_offering = EXCLUDED.campus_offering,
+                        course_uuid = EXCLUDED.course_uuid,
+                        title = EXCLUDED.title,
+                        subject_code = EXCLUDED.subject_code,
+                        subject_description = EXCLUDED.subject_description,
+                        translated_subject = EXCLUDED.translated_subject,
+                        subject_id = EXCLUDED.subject_id,
+                        activation_date = EXCLUDED.activation_date,
+                        score = EXCLUDED.score;
                 `;
+
+                await client.sql`
+                    INSERT INTO courses_data (
+                        pid, title, catalog_course_id, description, academic_level,
+                        credits, date_start, online_offering, campus_offering, subject_code
+                    ) VALUES (
+                        ${course.pid}, ${course.title}, ${course.course_id}, ${course.description},
+                        ${course.academic_level}, ${course.credits}, ${course.start_date},
+                        ${course.online_offering}, ${course.campus_offering}, ${course.subject_code}
+                    )
+                    ON CONFLICT (pid) DO UPDATE SET
+                        title = EXCLUDED.title,
+                        catalog_course_id = EXCLUDED.catalog_course_id,
+                        description = EXCLUDED.description,
+                        academic_level = EXCLUDED.academic_level,
+                        credits = EXCLUDED.credits,
+                        date_start = EXCLUDED.date_start,
+                        online_offering = EXCLUDED.online_offering,
+                        campus_offering = EXCLUDED.campus_offering,
+                        subject_code = EXCLUDED.subject_code;
+                `;
+
+                await client.sql`
+                    DELETE FROM prerequisites WHERE class_id = ${course.pid};
+                `;
+
+                for (const prereqId of course.prerequisites) {
+                    await client.sql`
+                        INSERT INTO prerequisites (class_id, course_id)
+                        VALUES (${course.pid}, ${prereqId});
+                    `;
+                }
+
+                await client.query('COMMIT');
+            } catch (courseError) {
+                await client.query('ROLLBACK');
+                console.error(`Error writing course ${course.pid}:`, courseError);
             }
         }
 
-        return NextResponse.json({ message: `Successfully updated ${courseSubset.length} courses` });
-
+        return NextResponse.json({
+            message: `Successfully updated ${parsedCourses.length} courses`,
+        });
     } catch (e) {
-        console.error("Error updating courses", e);
+        console.error('Error updating courses', e);
         return NextResponse.json({ error: String(e) }, { status: 500 });
     } finally {
         if (client) {
