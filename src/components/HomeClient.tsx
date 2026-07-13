@@ -18,6 +18,7 @@ import { GitBranch } from 'lucide-react';
 import { layoutCourseGraph, type CourseTree } from '@/lib/courseGraphLayout';
 import { CourseSearchNav } from '@/components/CourseSearchNav';
 import { AppFooter } from '@/components/AppFooter';
+import { normalizeCourseId, parseCourseIdList } from '@/lib/courseIds';
 
 const CONTROL_LABELS: Record<string, string> = {
     'react-flow__controls-zoomin': 'Zoom in',
@@ -46,25 +47,37 @@ function labelGraphControls(container: HTMLElement | null) {
     }
 }
 
+function coursePath(courseId: string): string {
+    return `/course/${encodeURIComponent(courseId)}`;
+}
+
+function courseTreesPath(courseIds: string[]): string {
+    return `/api/course-trees/${courseIds.map(encodeURIComponent).join(',')}`;
+}
+
+function coursesValidateUrl(courseIds: string[]): string {
+    const params = new URLSearchParams();
+    params.set('ids', courseIds.join(','));
+    return `/api/courses?${params.toString()}`;
+}
+
 export function HomeClient({
     initialIds,
     initialTrees,
+    initialError,
 }: {
     initialIds?: string;
     initialTrees?: CourseTree[];
+    initialError?: string;
 }) {
     const router = useRouter();
     const [courseQuery, setCourseQuery] = useState(initialIds ?? '');
     const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState<string | null>(
-        initialIds && !initialTrees && initialIds.includes(',')
-            ? 'Could not load one or more courses from the URL.'
-            : null
-    );
+    const [error, setError] = useState<string | null>(initialError ?? null);
     const initialGraph = initialTrees ? layoutCourseGraph(initialTrees) : null;
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialGraph?.nodes ?? []);
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialGraph?.edges ?? []);
-    const [hasSearched, setHasSearched] = useState(Boolean(initialTrees));
+    const [hasSearched, setHasSearched] = useState(Boolean(initialTrees) || Boolean(initialError));
     const [lastSearchedIds, setLastSearchedIds] = useState(
         initialTrees ? (initialIds ?? '') : ''
     );
@@ -81,9 +94,20 @@ export function HomeClient({
         setEdges(layoutedEdges);
     }, [setNodes, setEdges]);
 
-    const handleSearch = useCallback(async (courseIds: string[]) => {
+    const handleSearch = useCallback(async (rawCourseIds: string[]) => {
+        const parsed = parseCourseIdList(rawCourseIds.join(','));
+        if (parsed.errors.length > 0) {
+            setError(parsed.errors.map((e) => e.message).join(' '));
+            setHasSearched(true);
+            setNodes([]);
+            setEdges([]);
+            return;
+        }
+
+        const courseIds = parsed.ids;
+
         if (courseIds.length === 1) {
-            router.push(`/course/${courseIds[0]}`);
+            router.push(coursePath(courseIds[0]));
             return;
         }
 
@@ -92,35 +116,64 @@ export function HomeClient({
         setHasSearched(true);
 
         try {
-            const validateResponse = await fetch(`/api/courses?ids=${courseIds.join(',')}`);
-            if (validateResponse.ok) {
-                const found: { catalog_course_id: string }[] = await validateResponse.json();
-                const foundIds = new Set(
-                    found.map((course) => course.catalog_course_id.toUpperCase())
-                );
-                const invalidIds = courseIds.filter((id) => !foundIds.has(id));
-                if (invalidIds.length > 0) {
+            const validateResponse = await fetch(coursesValidateUrl(courseIds));
+            if (!validateResponse.ok) {
+                const errData = await validateResponse.json().catch(() => null);
+                if (validateResponse.status === 404) {
                     throw new Error(
-                        `Unknown course${invalidIds.length > 1 ? 's' : ''}: ${invalidIds.join(', ')}`
+                        typeof errData?.error === 'string'
+                            ? errData.error
+                            : 'Unknown course IDs.'
                     );
                 }
+                throw new Error(
+                    typeof errData?.error === 'string'
+                        ? errData.error
+                        : 'Course validation is temporarily unavailable. Please try again later.'
+                );
             }
 
-            const response = await fetch(`/api/course-trees/${courseIds.join(',')}`);
+            const found: { catalog_course_id: string }[] = await validateResponse.json();
+            const foundIds = new Set(
+                found.map((course) => normalizeCourseId(course.catalog_course_id))
+            );
+            const invalidIds = courseIds.filter((id) => !foundIds.has(id));
+            if (invalidIds.length > 0) {
+                throw new Error(
+                    `Unknown course${invalidIds.length > 1 ? 's' : ''}: ${invalidIds.join(', ')}`
+                );
+            }
+
+            const response = await fetch(courseTreesPath(courseIds));
+            const data = await response.json().catch(() => null);
 
             if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || 'Failed to fetch course data');
+                throw new Error(
+                    typeof data?.error === 'string'
+                        ? data.error
+                        : 'Failed to fetch course data'
+                );
             }
 
-            const data = await response.json();
+            const trees: CourseTree[] = Array.isArray(data?.trees) ? data.trees : [];
+            const treeErrors: { id: string; message: string }[] = Array.isArray(data?.errors)
+                ? data.errors
+                : [];
+
+            if (treeErrors.length > 0 || trees.length === 0) {
+                throw new Error(
+                    treeErrors.map((e) => e.message).join(' ') ||
+                        (typeof data?.error === 'string' ? data.error : 'Failed to fetch course data')
+                );
+            }
+
             setLastSearchedIds(courseIds.join(','));
-            generateGraph(data);
+            generateGraph(trees);
         } catch (err: unknown) {
             if (err instanceof Error) {
                 setError(err.message);
             } else {
-                setError("An unknown error occurred");
+                setError('An unknown error occurred');
             }
             setNodes([]);
             setEdges([]);
@@ -130,7 +183,7 @@ export function HomeClient({
     }, [generateGraph, router, setNodes, setEdges]);
 
     const showEmptyState = !hasSearched && nodes.length === 0 && !error;
-    const showGraph = hasSearched && !error;
+    const showGraph = hasSearched && !error && nodes.length > 0;
 
     const statusMessage = isLoading
         ? 'Loading course prerequisite graph…'

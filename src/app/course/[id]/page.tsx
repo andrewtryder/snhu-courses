@@ -10,6 +10,7 @@ import {
     getAllCourseIds,
 } from '@/lib/courses';
 import { siteUrl } from '@/lib/site';
+import { serializeJsonLd } from '@/lib/safeJsonLd';
 import { AppFooter } from '@/components/AppFooter';
 import { CourseSearchNav } from '@/components/CourseSearchNav';
 import { CoursePrerequisiteGraph } from '@/components/CoursePrerequisiteGraph';
@@ -132,7 +133,7 @@ export default async function CoursePage({ params }: CoursePageProps) {
             >
                 <script
                     type="application/ld+json"
-                    dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+                    dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
                 />
 
                 <article aria-labelledby="course-heading">
