@@ -3,12 +3,12 @@ import { fetchCourseDetails, fetchCourses, type KualiCourseListItem } from './fe
 import { parseCourse, type ParsedCourse } from './parse';
 import {
   advanceCursor,
+  getSyncItemsBatch,
   getSyncState,
   insertStagedCourse,
-  isLeaseActive,
-  refreshLease,
   setSyncError,
   startRefresh,
+  tryClaimLease,
   type CatalogSyncState,
 } from './persist';
 import { promoteStaging } from './promote';
@@ -59,13 +59,13 @@ async function mapWithConcurrency<T, R>(
 }
 
 async function fetchAndParseBatch(
-  listItems: KualiCourseListItem[],
+  pids: string[],
   concurrency: number
 ): Promise<ParsedCourse[]> {
-  const parsed = await mapWithConcurrency(listItems, concurrency, async (item) => {
-    const details = await fetchCourseDetails(item.pid);
+  const parsed = await mapWithConcurrency(pids, concurrency, async (pid) => {
+    const details = await fetchCourseDetails(pid);
     if (!details) return null;
-    return parseCourse(item, details);
+    return parseCourse(details, pid);
   });
   return parsed.filter((c): c is ParsedCourse => c !== null);
 }
@@ -87,9 +87,21 @@ async function loadCourseList(): Promise<KualiCourseListItem[]> {
   return courses;
 }
 
+/** Stable, deduplicated pid order for one refresh snapshot. */
+export function uniquePids(courses: KualiCourseListItem[]): string[] {
+  const seen = new Set<string>();
+  const pids: string[] = [];
+  for (const course of courses) {
+    if (!course.pid || seen.has(course.pid)) continue;
+    seen.add(course.pid);
+    pids.push(course.pid);
+  }
+  return pids;
+}
+
 /**
- * Full local bootstrap: fetch entire catalog, fill staging, validate, promote.
- * Safe to run as long as needed outside Vercel.
+ * Full local bootstrap: fetch entire catalog once, snapshot pids, fill staging,
+ * validate, promote. Safe to run as long as needed outside Vercel.
  */
 export async function bootstrapCatalog(
   options: { concurrency?: number } = {}
@@ -99,12 +111,13 @@ export async function bootstrapCatalog(
   return withClient(async (client) => {
     console.log('Fetching complete course list...');
     const courses = await loadCourseList();
+    const pids = uniquePids(courses);
 
-    console.log(`Found ${courses.length} courses. Starting staging import...`);
-    await startRefresh(client, courses.length);
+    console.log(`Found ${pids.length} courses. Starting staging import...`);
+    const syncId = await startRefresh(client, pids);
 
-    for (let i = 0; i < courses.length; i += CRON_BATCH_SIZE) {
-      const slice = courses.slice(i, i + CRON_BATCH_SIZE);
+    for (let i = 0; i < pids.length; i += CRON_BATCH_SIZE) {
+      const slice = await getSyncItemsBatch(client, syncId, i, CRON_BATCH_SIZE);
       const parsed = await fetchAndParseBatch(slice, concurrency);
 
       for (const course of parsed) {
@@ -114,7 +127,7 @@ export async function bootstrapCatalog(
       const newCursor = i + slice.length;
       await advanceCursor(client, newCursor, parsed.length);
       console.log(
-        `Staged batch: ${parsed.length} imported, cursor ${newCursor}/${courses.length}`
+        `Staged batch: ${parsed.length} imported, cursor ${newCursor}/${pids.length}`
       );
     }
 
@@ -127,15 +140,16 @@ export async function bootstrapCatalog(
 
     return {
       imported: state.imported_count,
-      expected: state.expected_count ?? courses.length,
+      expected: state.expected_count ?? pids.length,
     };
   });
 }
 
 /**
  * One cron/local sync tick:
- * - if running: process next batch (and promote when finished)
- * - else if due: start refresh and process first batch
+ * - if awaiting_bootstrap: skip
+ * - if running: process next batch from catalog_sync_items (and promote when finished)
+ * - else if due: fetch list once, snapshot pids, process first batch
  * - else: skip
  */
 export async function runCatalogSyncBatch(
@@ -150,18 +164,20 @@ export async function runCatalogSyncBatch(
       let state = await getSyncState(client);
       const now = new Date();
 
-      if (state.status === 'running') {
-        if (!ignoreLease && isLeaseActive(state, now)) {
-          return {
-            action: 'skipped',
-            reason: 'lease_held',
-            state,
-          };
-        }
-        await refreshLease(client);
-      } else {
+      if (state.status === 'awaiting_bootstrap') {
+        return {
+          action: 'skipped',
+          reason: 'not_bootstrapped',
+          state,
+        };
+      }
+
+      const wasRunning = state.status === 'running';
+
+      if (!wasRunning) {
+        // next_due_at is only set by a successful bootstrap/promote; null is never due.
         const due =
-          state.next_due_at === null || state.next_due_at.getTime() <= now.getTime();
+          state.next_due_at !== null && state.next_due_at.getTime() <= now.getTime();
         if (!due) {
           return {
             action: 'skipped',
@@ -169,18 +185,34 @@ export async function runCatalogSyncBatch(
             state,
           };
         }
-
-        console.log('Catalog refresh due; fetching course list...');
-        const courses = await loadCourseList();
-        await startRefresh(client, courses.length);
-        state = await getSyncState(client);
       }
 
-      const courses = await loadCourseList();
-      const expected = state.expected_count ?? courses.length;
+      const claimed = await tryClaimLease(client, { force: ignoreLease });
+      if (!claimed) {
+        return {
+          action: 'skipped',
+          reason: 'lease_held',
+          state,
+        };
+      }
+
+      if (!wasRunning) {
+        console.log('Catalog refresh due; fetching course list and snapshotting pids...');
+        const courses = await loadCourseList();
+        await startRefresh(client, uniquePids(courses));
+        state = await getSyncState(client);
+      } else {
+        state = claimed;
+      }
+
+      if (!state.sync_id) {
+        throw new Error('catalog_sync_state.sync_id missing while status is running');
+      }
+
+      const expected = state.expected_count ?? 0;
       const cursor = state.cursor;
 
-      if (cursor >= expected || cursor >= courses.length) {
+      if (cursor >= expected) {
         await promoteStaging(client);
         return {
           action: 'promoted',
@@ -191,19 +223,29 @@ export async function runCatalogSyncBatch(
         };
       }
 
-      const end = Math.min(cursor + batchSize, expected, courses.length);
-      const slice = courses.slice(cursor, end);
+      const slice = await getSyncItemsBatch(client, state.sync_id, cursor, batchSize);
+      if (slice.length === 0) {
+        await promoteStaging(client);
+        return {
+          action: 'promoted',
+          processed: 0,
+          imported: state.imported_count,
+          expected,
+          done: true,
+        };
+      }
+
       const parsed = await fetchAndParseBatch(slice, concurrency);
 
       for (const course of parsed) {
         await insertStagedCourse(client, course);
       }
 
-      const newCursor = end;
+      const newCursor = cursor + slice.length;
       await advanceCursor(client, newCursor, parsed.length);
       const importedTotal = state.imported_count + parsed.length;
 
-      if (newCursor >= expected || newCursor >= courses.length) {
+      if (newCursor >= expected) {
         await promoteStaging(client);
         return {
           action: 'promoted',

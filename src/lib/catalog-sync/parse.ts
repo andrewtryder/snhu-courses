@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { isValidCourseId, normalizeCourseId } from '@/lib/courseIds';
-import type { KualiCourseDetails, KualiCourseListItem } from './fetch';
+import type { KualiCourseDetails } from './fetch';
 
 export interface ParsedCourse {
   course_id: string;
@@ -74,34 +74,32 @@ export function parseCredits(creditsData: unknown): number {
   return 0;
 }
 
-export function parseCourse(
-  data: KualiCourseListItem,
-  details: KualiCourseDetails
-): ParsedCourse {
+/** Parse a course from the detail endpoint (includes list + detail fields). */
+export function parseCourse(details: KualiCourseDetails, fallbackPid?: string): ParsedCourse {
   let online_offering = false;
   let campus_offering = false;
-  if (data.offering) {
-    online_offering = !!data.offering.online;
-    campus_offering = !!data.offering.campus;
+  if (details.offering) {
+    online_offering = !!details.offering.online;
+    campus_offering = !!details.offering.campus;
   }
 
   return {
-    course_id: data.__catalogCourseId || '',
-    academic_level: data.academicLevel?.name || '',
-    translated_level: data.academicLevel?.translatedNames?.es || '',
-    passed_catalog_query: String(data.__passedCatalogQuery || ''),
-    start_date: data.dateStart || '',
+    course_id: details.__catalogCourseId || '',
+    academic_level: details.academicLevel?.name || '',
+    translated_level: details.academicLevel?.translatedNames?.es || '',
+    passed_catalog_query: String(details.__passedCatalogQuery || ''),
+    start_date: details.dateStart || '',
     online_offering,
     campus_offering,
-    pid: data.pid,
-    course_uuid: data.id || '',
-    title: data.title || '',
-    subject_code: data.subjectCode?.name || '',
-    subject_description: data.subjectCode?.description || '',
-    translated_subject: data.subjectCode?.translatedNames?.es || '',
-    subject_id: data.subjectCode?.id || '',
-    activation_date: data.catalogActivationDate || '',
-    score: data._score || 0.0,
+    pid: details.pid || fallbackPid || '',
+    course_uuid: details.id || '',
+    title: details.title || '',
+    subject_code: details.subjectCode?.name || '',
+    subject_description: details.subjectCode?.description || '',
+    translated_subject: details.subjectCode?.translatedNames?.es || '',
+    subject_id: details.subjectCode?.id || '',
+    activation_date: details.catalogActivationDate || '',
+    score: details._score || 0.0,
     description: details.description || '',
     credits: parseCredits(details.credits),
     prerequisites: extractPrerequisites(details.rulesPrerequisites || ''),

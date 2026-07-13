@@ -76,3 +76,44 @@ src/
   lib/
     courseGraphLayout.tsx
     site.ts
+```
+
+## Catalog data operations
+
+This app owns the shared Postgres catalog. Other apps (for example [SNHU Transfers](https://snhu-transfers.vercel.app)) may read through a stable contract, but must not write catalog tables.
+
+| Data | Owner | Notes |
+| --- | --- | --- |
+| `courses`, `courses_data`, `prerequisites` | snhu-courses | Live catalog |
+| `*_stage` staging tables | snhu-courses | Used during refresh |
+| `catalog_sync_state`, `catalog_sync_items` | snhu-courses | Sync lease and PID snapshot |
+| `catalog_course_lookup` | snhu-courses | Read-only view for other apps |
+| `transfer_*` | snhu-transfers | Do not create, drop, or write from this repo |
+
+### Migrate and bootstrap (required)
+
+CLI scripts load `POSTGRES_URL` from `.env.local`, then `.env`. Shell-exported values still win.
+
+```bash
+npm run db:migrate
+npm run catalog:bootstrap
+```
+
+Or pass the URL explicitly:
+
+```bash
+POSTGRES_URL='postgresql://...' npm run db:migrate
+POSTGRES_URL='postgresql://...' npm run catalog:bootstrap
+```
+
+Bootstrap is a manual production step. Until it finishes, cron returns `not_bootstrapped` and will not import the catalog.
+
+Optional local batch tick (forces lease takeover):
+
+```bash
+npm run catalog:sync
+```
+
+### Cron
+
+Vercel runs `GET /api/cron/catalog-sync` daily at `17 3 * * *` (see [`vercel.json`](vercel.json)). Set `POSTGRES_URL` and `CRON_SECRET` in the Vercel project. The route requires `Authorization: Bearer $CRON_SECRET`. After bootstrap, cron only refreshes when `next_due_at` is due (about every two months).

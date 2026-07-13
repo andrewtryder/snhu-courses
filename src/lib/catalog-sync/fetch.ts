@@ -26,10 +26,12 @@ export interface KualiCourseListItem {
   _score?: number;
 }
 
-export interface KualiCourseDetails {
+/** Detail payload includes list fields plus description / credits / prereqs. */
+export interface KualiCourseDetails extends KualiCourseListItem {
   description?: string;
   credits?: unknown;
   rulesPrerequisites?: string;
+  additionalInfoOnline?: string;
 }
 
 export async function fetchCourses(query = ''): Promise<KualiCourseListItem[] | null> {
