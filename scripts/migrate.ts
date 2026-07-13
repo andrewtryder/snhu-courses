@@ -137,17 +137,6 @@ async function migrate() {
       );
     `;
 
-    // Owned by snhu-transfers; created here so the shared DB has the matching shape.
-    await client.sql`
-      CREATE TABLE IF NOT EXISTS transfer_sync_items (
-        sync_id UUID NOT NULL,
-        ordinal INTEGER NOT NULL,
-        pid TEXT NOT NULL,
-        PRIMARY KEY (sync_id, ordinal),
-        UNIQUE (sync_id, pid)
-      );
-    `;
-
     // Manual catalog:bootstrap must run before cron may refresh.
     await client.sql`
       INSERT INTO catalog_sync_state (id, status, cursor, imported_count)

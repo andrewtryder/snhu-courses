@@ -62,12 +62,13 @@ async function fetchAndParseBatch(
   pids: string[],
   concurrency: number
 ): Promise<ParsedCourse[]> {
-  const parsed = await mapWithConcurrency(pids, concurrency, async (pid) => {
+  return mapWithConcurrency(pids, concurrency, async (pid) => {
     const details = await fetchCourseDetails(pid);
-    if (!details) return null;
+    if (!details) {
+      throw new Error(`Failed to fetch course details for pid ${pid}`);
+    }
     return parseCourse(details, pid);
   });
-  return parsed.filter((c): c is ParsedCourse => c !== null);
 }
 
 async function withClient<T>(fn: (client: VercelPoolClient) => Promise<T>): Promise<T> {
@@ -118,6 +119,11 @@ export async function bootstrapCatalog(
 
     for (let i = 0; i < pids.length; i += CRON_BATCH_SIZE) {
       const slice = await getSyncItemsBatch(client, syncId, i, CRON_BATCH_SIZE);
+      if (slice.length === 0) {
+        throw new Error(
+          `catalog_sync_items empty at cursor ${i} with expected_count ${pids.length}`
+        );
+      }
       const parsed = await fetchAndParseBatch(slice, concurrency);
 
       for (const course of parsed) {
@@ -225,14 +231,9 @@ export async function runCatalogSyncBatch(
 
       const slice = await getSyncItemsBatch(client, state.sync_id, cursor, batchSize);
       if (slice.length === 0) {
-        await promoteStaging(client);
-        return {
-          action: 'promoted',
-          processed: 0,
-          imported: state.imported_count,
-          expected,
-          done: true,
-        };
+        throw new Error(
+          `catalog_sync_items empty at cursor ${cursor} with expected_count ${expected}`
+        );
       }
 
       const parsed = await fetchAndParseBatch(slice, concurrency);
