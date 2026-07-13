@@ -34,6 +34,14 @@ export async function validateStaging(client: VercelPoolClient): Promise<Validat
   if (expected !== null && imported !== expected) {
     errors.push(`imported_count (${imported}) !== expected_count (${expected})`);
   }
+  if (expected !== null && stageCourses !== expected) {
+    errors.push(`courses_stage count (${stageCourses}) !== expected_count (${expected})`);
+  }
+  if (expected !== null && stageData !== expected) {
+    errors.push(
+      `courses_data_stage count (${stageData}) !== expected_count (${expected})`
+    );
+  }
   if (stageCourses !== stageData) {
     errors.push(
       `courses_stage count (${stageCourses}) !== courses_data_stage count (${stageData})`
