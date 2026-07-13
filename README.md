@@ -42,6 +42,7 @@ I also built [SNHU Transfers](https://snhu-transfers.vercel.app), another tool f
 - [Dagre](https://github.com/dagrejs/dagre) for graph layout
 - [Vercel Postgres](https://vercel.com/docs/storage/vercel-postgres) for course and prerequisite data
 - [Vercel Analytics](https://vercel.com/docs/analytics) for analytics
+- [Honeybadger](https://docs.honeybadger.io/lib/javascript/integration/nextjs/) for error monitoring
 - [Lucide React](https://lucide.dev/) for icons
 
 ## Architecture Overview
@@ -117,3 +118,23 @@ npm run catalog:sync
 ### Cron
 
 Vercel runs `GET /api/cron/catalog-sync` daily at `17 3 * * *` (see [`vercel.json`](vercel.json)). Set `POSTGRES_URL` and `CRON_SECRET` in the Vercel project. The route requires `Authorization: Bearer $CRON_SECRET`. After bootstrap, cron only refreshes when `next_due_at` is due (about every two months).
+
+## Error monitoring (Honeybadger)
+
+Production error reporting uses Honeybadger. Configure these variables in local `.env` / `.env.local` and in **Vercel Production**:
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `HONEYBADGER_API_KEY` | Recommended for production | Server-side API key used by Node runtime reporting (instrumentation, catalog sync, `onRequestError`). Never expose this as `NEXT_PUBLIC_*`. |
+| `NEXT_PUBLIC_HONEYBADGER_API_KEY` | Optional | Enables browser-side reporting from App Router error boundaries and client init. The app builds and runs when this is absent. |
+
+Honeybadger Check-ins are a Business-plan feature and are not used in this project.
+
+Source-map uploading is intentionally disabled. Honeybadger’s `setupHoneybadger()` Next.js wrapper injects a `webpack()` config that is incompatible with Next.js 16’s default Turbopack build, so this app uses the supported manual path instead: server config via `src/instrumentation.ts` / `honeybadger.server.config.js`, and optional browser config via `HoneybadgerClientInit` plus App Router `error.tsx` / `global-error.tsx`.
+
+### Verifying reporting
+
+Do not add a permanently public error endpoint. To verify:
+
+1. Set `HONEYBADGER_API_KEY` in Vercel Production (and optionally `NEXT_PUBLIC_HONEYBADGER_API_KEY`).
+2. Deploy, then temporarily trigger a known failure in a private/staging context (for example a one-off preview deploy that throws inside a server action you remove afterward), or wait for a real catalog-sync failure and confirm a notice tagged `catalog-sync` in Honeybadger.

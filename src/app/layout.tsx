@@ -3,6 +3,7 @@ import { Geist, Inter } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { HoneybadgerClientInit } from "@/components/HoneybadgerClientInit";
 import { siteUrl } from "@/lib/site";
 
 const inter = Inter({
@@ -67,6 +68,7 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
+        <HoneybadgerClientInit />
         {children}
         <Analytics />
         <SpeedInsights />

@@ -1,4 +1,5 @@
 import { db, type VercelPoolClient } from '@vercel/postgres';
+import { reportServerError } from '@/lib/monitoring/honeybadger';
 import { fetchCourseDetails, fetchCourses, type KualiCourseListItem } from './fetch';
 import { parseCourse, type ParsedCourse } from './parse';
 import {
@@ -166,8 +167,9 @@ export async function runCatalogSyncBatch(
   const ignoreLease = options.ignoreLease ?? false;
 
   return withClient(async (client) => {
+    let state: CatalogSyncState | null = null;
     try {
-      let state = await getSyncState(client);
+      state = await getSyncState(client);
       const now = new Date();
 
       if (state.status === 'awaiting_bootstrap') {
@@ -267,6 +269,21 @@ export async function runCatalogSyncBatch(
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      await reportServerError(error, {
+        component: 'catalog-sync',
+        action: 'runCatalogSyncBatch',
+        context: {
+          job: 'catalog-sync',
+          component: 'catalog-sync',
+          cursor: state?.cursor ?? null,
+          expected_count: state?.expected_count ?? null,
+          imported_count: state?.imported_count ?? null,
+          sync_id: state?.sync_id ?? null,
+          sync_status: state?.status ?? null,
+          vercel_env: process.env.VERCEL_ENV ?? null,
+        },
+        tags: ['cron', 'catalog-sync'],
+      });
       try {
         await setSyncError(client, message);
       } catch {
