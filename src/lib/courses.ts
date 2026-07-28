@@ -1,6 +1,7 @@
 import { db } from '@vercel/postgres';
 import type { VercelPoolClient } from '@vercel/postgres';
 import { unstable_cache } from 'next/cache';
+import { cache } from 'react';
 import type { CourseTree } from '@/lib/courseGraphLayout';
 
 // ─── Shared constants ─────────────────────────────────────────────────────────
@@ -214,33 +215,30 @@ export function buildTreesFromGraph(
 // them in unstable_cache so that repeated SSR renders skip the database.
 
 async function getCourseByIdUncached(courseId: string): Promise<CourseRecord | null> {
-    const id = courseId.toUpperCase();
     return withDbClient(async (client) => {
         const result = await client.query<CourseRecord>(
             `SELECT title, pid, catalog_course_id, description, academic_level, credits, subject_code
              FROM courses_data
              WHERE catalog_course_id = $1`,
-            [id]
+            [courseId]
         );
         return result.rows.length > 0 ? result.rows[0] : null;
     });
 }
 
 async function getCourseTreeUncached(courseId: string): Promise<CourseTree | null> {
-    const id = courseId.toUpperCase();
     return withDbClient(async (client) => {
-        const { rootTitles, edges } = await fetchPrerequisiteGraph(client, [id]);
-        const [result] = buildTreesFromGraph([id], rootTitles, edges);
+        const { rootTitles, edges } = await fetchPrerequisiteGraph(client, [courseId]);
+        const [result] = buildTreesFromGraph([courseId], rootTitles, edges);
         return result?.tree ?? null;
     });
 }
 
 async function getCourseTreesUncached(courseIds: string[]): Promise<CourseTreeResult[]> {
     if (courseIds.length === 0) return [];
-    const ids = courseIds.map((id) => id.toUpperCase());
     return withDbClient(async (client) => {
-        const { rootTitles, edges } = await fetchPrerequisiteGraph(client, ids);
-        return buildTreesFromGraph(ids, rootTitles, edges);
+        const { rootTitles, edges } = await fetchPrerequisiteGraph(client, courseIds);
+        return buildTreesFromGraph(courseIds, rootTitles, edges);
     });
 }
 
@@ -303,14 +301,13 @@ async function getCatalogLastModifiedUncached(): Promise<Date | null> {
 }
 
 async function getDependentCourseIdsUncached(courseId: string): Promise<string[]> {
-    const id = courseId.toUpperCase();
     return withDbClient(async (client) => {
         const result = await client.sql`
             SELECT DISTINCT cd.catalog_course_id
             FROM prerequisites p
             JOIN courses_data cd ON p.class_id = cd.pid
-            WHERE p.course_id = ${id}
-              AND cd.catalog_course_id != ${id}
+            WHERE p.course_id = ${courseId}
+              AND cd.catalog_course_id != ${courseId}
             ORDER BY cd.catalog_course_id
         `;
         return result.rows.map((row) => row.catalog_course_id as string);
@@ -318,7 +315,6 @@ async function getDependentCourseIdsUncached(courseId: string): Promise<string[]
 }
 
 async function getDirectPrerequisiteIdsUncached(courseId: string): Promise<string[]> {
-    const id = courseId.toUpperCase();
     return withDbClient(async (client) => {
         const result = await client.sql`
             SELECT prerequisites.course_id
@@ -327,9 +323,9 @@ async function getDirectPrerequisiteIdsUncached(courseId: string): Promise<strin
             WHERE prerequisites.class_id IN (
                 SELECT pid
                 FROM courses_data
-                WHERE catalog_course_id = ${id}
+                WHERE catalog_course_id = ${courseId}
             )
-              AND prerequisites.course_id != ${id}
+              AND prerequisites.course_id != ${courseId}
             ORDER BY prerequisites.course_id
         `;
         return result.rows.map((row) => row.course_id as string);
@@ -337,16 +333,29 @@ async function getDirectPrerequisiteIdsUncached(courseId: string): Promise<strin
 }
 
 // ─── Exported cached helpers ─────────────────────────────────────────────────
-// All IDs are normalized to UPPERCASE before use in cache keys to avoid
-// creating separate entries for equivalent lowercase/uppercase inputs.
+// All IDs are normalized to UPPERCASE before invoking cached functions. Next.js
+// includes function arguments in its cache key, so normalizing inside a cached
+// callback would create separate entries for lowercase and uppercase callers.
+
+const getCourseByIdCached = unstable_cache(
+    getCourseByIdUncached,
+    ['course'],
+    { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
+);
 
 /**
  * Returns a full `CourseRecord` for `courseId`, or `null` if not found.
  * Cached for 24 hours; invalidated via the `catalog-data` tag.
  */
-export const getCourseById = unstable_cache(
-    (courseId: string) => getCourseByIdUncached(courseId.toUpperCase()),
-    ['course'],
+const getCourseByIdRequestCached = cache((courseId: string) => getCourseByIdCached(courseId));
+
+export function getCourseById(courseId: string): Promise<CourseRecord | null> {
+    return getCourseByIdRequestCached(courseId.toUpperCase());
+}
+
+const getCourseTreeCached = unstable_cache(
+    getCourseTreeUncached,
+    ['course-tree'],
     { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
 );
 
@@ -354,9 +363,15 @@ export const getCourseById = unstable_cache(
  * Returns the prerequisite `CourseTree` for a single course, or `null`.
  * Uses a single recursive CTE internally. Cached for 24 hours.
  */
-export const getCourseTree = unstable_cache(
-    (courseId: string) => getCourseTreeUncached(courseId.toUpperCase()),
-    ['course-tree'],
+const getCourseTreeRequestCached = cache((courseId: string) => getCourseTreeCached(courseId));
+
+export function getCourseTree(courseId: string): Promise<CourseTree | null> {
+    return getCourseTreeRequestCached(courseId.toUpperCase());
+}
+
+const getCourseTreesCached = unstable_cache(
+    getCourseTreesUncached,
+    ['course-trees'],
     { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
 );
 
@@ -368,29 +383,38 @@ export const getCourseTree = unstable_cache(
  * the same cache entry.
  */
 export function getCourseTrees(courseIds: string[]): Promise<CourseTreeResult[]> {
-    const ids = courseIds.map((id) => id.toUpperCase()).sort();
-    return unstable_cache(
-        () => getCourseTreesUncached(ids),
-        ['course-trees', ...ids],
-        { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
-    )();
+    const requestedIds = courseIds.map((id) => id.toUpperCase());
+    const canonicalIds = [...new Set(requestedIds)].sort();
+
+    return getCourseTreesCached(canonicalIds).then((canonicalResults) => {
+        const resultsById = new Map(canonicalResults.map((result) => [result.id, result]));
+        return requestedIds.map((id) => resultsById.get(id) ?? { id, tree: null });
+    });
 }
+
+const getAllCourseIdsCached = unstable_cache(
+    getAllCourseIdsUncached,
+    ['course-ids'],
+    { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
+);
 
 /**
  * Fetches all known course IDs. Returns `[]` when the database is unavailable
  * (e.g. local builds without POSTGRES_URL) so callers can fail gracefully.
  * Cached for 24 hours.
  */
-export const getAllCourseIds = unstable_cache(
-    async () => {
-        try {
-            return await getAllCourseIdsUncached();
-        } catch (error) {
-            console.warn('Could not fetch course IDs for static generation:', error);
-            return [];
-        }
-    },
-    ['course-ids'],
+export async function getAllCourseIds(): Promise<string[]> {
+    try {
+        return await getAllCourseIdsCached();
+    } catch (error) {
+        console.warn('Could not fetch course IDs for static generation:', error);
+        return [];
+    }
+}
+
+const getAllCourseSummariesCached = unstable_cache(
+    getAllCourseSummariesUncached,
+    ['course-summaries'],
     { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
 );
 
@@ -399,17 +423,19 @@ export const getAllCourseIds = unstable_cache(
  * Deduplicates by `catalog_course_id` (first wins). Returns `[]` when the DB
  * is unavailable. Cached for 24 hours.
  */
-export const getAllCourseSummaries = unstable_cache(
-    async () => {
-        try {
-            return await getAllCourseSummariesUncached();
-        } catch (error) {
-            console.warn('Could not fetch course summaries for directory:', error);
-            return [];
-        }
-    },
-    ['course-summaries'],
-    { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
+export async function getAllCourseSummaries(): Promise<CourseSummary[]> {
+    try {
+        return await getAllCourseSummariesCached();
+    } catch (error) {
+        console.warn('Could not fetch course summaries for directory:', error);
+        return [];
+    }
+}
+
+const getCatalogLastModifiedCached = unstable_cache(
+    getCatalogLastModifiedUncached,
+    ['catalog-last-modified'],
+    { tags: [CATALOG_TAG], revalidate: SYNC_STATE_TTL }
 );
 
 /**
@@ -417,17 +443,29 @@ export const getAllCourseSummaries = unstable_cache(
  * Returns `null` when unavailable, missing, or invalid — never throws.
  * Cached for 1 hour (changes on each successful sync).
  */
-export const getCatalogLastModified = unstable_cache(
-    async () => {
-        try {
-            return await getCatalogLastModifiedUncached();
-        } catch (error) {
-            console.warn('Could not fetch catalog last-modified timestamp:', error);
-            return null;
-        }
-    },
-    ['catalog-last-modified'],
-    { tags: [CATALOG_TAG], revalidate: SYNC_STATE_TTL }
+export async function getCatalogLastModified(): Promise<Date | null> {
+    try {
+        return await getCatalogLastModifiedCached();
+    } catch (error) {
+        console.warn('Could not fetch catalog last-modified timestamp:', error);
+        return null;
+    }
+}
+
+/** Strict sitemap loader so route-level fallback can distinguish outages from valid empty data. */
+export function getSitemapCatalogData(): Promise<{
+    courseIds: string[];
+    catalogLastModified: Date | null;
+}> {
+    return Promise.all([getAllCourseIdsCached(), getCatalogLastModifiedCached()]).then(
+        ([courseIds, catalogLastModified]) => ({ courseIds, catalogLastModified })
+    );
+}
+
+const getDependentCourseIdsCached = unstable_cache(
+    getDependentCourseIdsUncached,
+    ['course-dependents'],
+    { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
 );
 
 /**
@@ -435,9 +473,17 @@ export const getCatalogLastModified = unstable_cache(
  * Used for internal linking ("this course is a prerequisite for…").
  * Cached for 24 hours.
  */
-export const getDependentCourseIds = unstable_cache(
-    (courseId: string) => getDependentCourseIdsUncached(courseId.toUpperCase()),
-    ['course-dependents'],
+const getDependentCourseIdsRequestCached = cache((courseId: string) =>
+    getDependentCourseIdsCached(courseId)
+);
+
+export function getDependentCourseIds(courseId: string): Promise<string[]> {
+    return getDependentCourseIdsRequestCached(courseId.toUpperCase());
+}
+
+const getDirectPrerequisiteIdsCached = unstable_cache(
+    getDirectPrerequisiteIdsUncached,
+    ['course-direct-prereqs'],
     { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
 );
 
@@ -445,8 +491,10 @@ export const getDependentCourseIds = unstable_cache(
  * Direct prerequisite IDs for a course (excluding self).
  * Cached for 24 hours.
  */
-export const getDirectPrerequisiteIds = unstable_cache(
-    (courseId: string) => getDirectPrerequisiteIdsUncached(courseId.toUpperCase()),
-    ['course-direct-prereqs'],
-    { tags: [CATALOG_TAG], revalidate: CATALOG_TTL }
+const getDirectPrerequisiteIdsRequestCached = cache((courseId: string) =>
+    getDirectPrerequisiteIdsCached(courseId)
 );
+
+export function getDirectPrerequisiteIds(courseId: string): Promise<string[]> {
+    return getDirectPrerequisiteIdsRequestCached(courseId.toUpperCase());
+}

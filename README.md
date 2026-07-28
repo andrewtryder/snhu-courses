@@ -151,15 +151,30 @@ Generate secrets with `openssl rand -hex 32`. **Never commit secrets to the repo
    npm run catalog:sync
    ```
 
-4. **Revalidate the Next.js cache** after a successful catalog promotion so that
-   ISR pages and `unstable_cache` entries are refreshed immediately:
+4. **Revalidate the Next.js cache** after a successful catalog promotion:
 
    ```bash
    curl -X POST https://your-site.vercel.app/api/revalidate \
      -H "Authorization: Bearer $REVALIDATE_SECRET"
    ```
 
-   The endpoint invalidates the `catalog-data` tag and revalidates `/`, `/courses`, and `/sitemap.xml`. It returns `401` if the secret is wrong and `500` if `REVALIDATE_SECRET` is not configured.
+   The endpoint invalidates the `catalog-data` tag using Next.js's `max` profile
+   (stale-while-revalidate: the next visitor can receive the prior catalog while
+   it refreshes) and revalidates `/`, `/courses`, and `/sitemap.xml`. It returns
+   `401` if the secret is wrong and `500` if `REVALIDATE_SECRET` is not configured.
+
+### Catalog query and build behavior
+
+Course records, trees, direct prerequisites, and dependents are persisted in the
+`catalog-data` cache for 24 hours. The recursive tree loader performs two queries
+on a cold cache (root titles and the recursive CTE); a complete cold course page
+also queries the course record, direct prerequisites, and dependents. Warm cached
+requests perform zero catalog queries.
+
+Vercel builds tolerate a missing or temporarily unavailable Neon database:
+`generateStaticParams` returns no IDs, `/courses` renders its unavailable state,
+and the sitemap emits static routes only. Infrastructure-error fallbacks occur
+outside the persistent cache, so they are never retained as an empty catalog.
 
 #### Vercel cron (optional compatibility path)
 

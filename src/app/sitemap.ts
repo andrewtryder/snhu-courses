@@ -1,12 +1,17 @@
 import type { MetadataRoute } from 'next';
-import { getAllCourseIds, getCatalogLastModified } from '@/lib/courses';
+import { getSitemapCatalogData } from '@/lib/courses';
 import { siteUrl } from '@/lib/site';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    const [courseIds, catalogLastModified] = await Promise.all([
-        getAllCourseIds(),
-        getCatalogLastModified(),
-    ]);
+    let courseIds: string[] = [];
+    let catalogLastModified: Date | null = null;
+
+    try {
+        ({ courseIds, catalogLastModified } = await getSitemapCatalogData());
+    } catch (error) {
+        // Build-safe: catalog infrastructure failures must not prevent deployment.
+        console.warn('Could not fetch catalog data for sitemap; serving static routes only.', error);
+    }
 
     const withCatalogTimestamp = (
         entry: Omit<MetadataRoute.Sitemap[number], 'lastModified'>
