@@ -115,9 +115,63 @@ Optional local batch tick (forces lease takeover):
 npm run catalog:sync
 ```
 
-### Cron
+### External synchronization (preferred model)
 
-Vercel runs `GET /api/cron/catalog-sync` daily at `17 3 * * *` (see [`vercel.json`](vercel.json)). Set `POSTGRES_URL` and `CRON_SECRET` in the Vercel project. The route requires `Authorization: Bearer $CRON_SECRET`. After bootstrap, cron only refreshes when `next_due_at` is due (about every two months).
+Running sync from CircleCI or a trusted desktop avoids consuming Vercel function quota for long-running catalog imports and keeps production database activity predictable.
+
+#### Required environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `POSTGRES_URL` | Pooled Neon connection URL |
+| `POSTGRES_URL_NON_POOLING` | Direct Neon connection URL (used by migration script) |
+| `CRON_SECRET` | Authorization secret for `/api/cron/catalog-sync` |
+| `REVALIDATE_SECRET` | Authorization secret for `POST /api/revalidate` |
+
+Generate secrets with `openssl rand -hex 32`. **Never commit secrets to the repository.**
+
+#### Workflow
+
+1. **Migrate** (idempotent — safe to re-run):
+
+   ```bash
+   npm run db:migrate
+   # or: POSTGRES_URL='postgresql://...' npm run db:migrate
+   ```
+
+2. **Bootstrap** (one-time, required before first cron/sync can run):
+
+   ```bash
+   npm run catalog:bootstrap
+   ```
+
+3. **Incremental sync** (optional — forces a local batch tick):
+
+   ```bash
+   npm run catalog:sync
+   ```
+
+4. **Revalidate the Next.js cache** after a successful catalog promotion so that
+   ISR pages and `unstable_cache` entries are refreshed immediately:
+
+   ```bash
+   curl -X POST https://your-site.vercel.app/api/revalidate \
+     -H "Authorization: Bearer $REVALIDATE_SECRET"
+   ```
+
+   The endpoint invalidates the `catalog-data` tag and revalidates `/`, `/courses`, and `/sitemap.xml`. It returns `401` if the secret is wrong and `500` if `REVALIDATE_SECRET` is not configured.
+
+#### Vercel cron (optional compatibility path)
+
+`vercel.json` configures a daily cron at `17 3 * * *` calling `/api/cron/catalog-sync`. This remains in place as a fallback, but external execution is preferred to reduce function quota consumption.
+
+To disable the Vercel cron, remove the `crons` key from `vercel.json`:
+
+```json
+{}
+```
+
+The cron route itself (`/api/cron/catalog-sync`) can remain; it will simply never be called automatically.
 
 ## Error monitoring (Honeybadger)
 

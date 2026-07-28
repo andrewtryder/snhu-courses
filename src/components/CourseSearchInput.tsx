@@ -65,14 +65,15 @@ export function CourseSearchInput({
     // Only fetch/open suggestions while the user is actively focused in the input.
     // Prefill from course-page navigation must not auto-activate the combobox.
     useEffect(() => {
-        if (!isFocused || activeToken.length < 1) {
-            setIsOpen(false);
-            setIsSearching(false);
-            return;
-        }
-
         const controller = new AbortController();
+
         const timeout = setTimeout(async () => {
+            if (!isFocused || activeToken.length < 1) {
+                setIsOpen(false);
+                setIsSearching(false);
+                return;
+            }
+
             setIsSearching(true);
             setIsOpen(true);
             setSearchError(null);

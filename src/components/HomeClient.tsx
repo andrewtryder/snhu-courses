@@ -18,7 +18,7 @@ import { GitBranch } from 'lucide-react';
 import { layoutCourseGraph, type CourseTree } from '@/lib/courseGraphLayout';
 import { CourseSearchNav } from '@/components/CourseSearchNav';
 import { AppFooter } from '@/components/AppFooter';
-import { normalizeCourseId, parseCourseIdList } from '@/lib/courseIds';
+import { parseCourseIdList } from '@/lib/courseIds';
 
 const CONTROL_LABELS: Record<string, string> = {
     'react-flow__controls-zoomin': 'Zoom in',
@@ -53,12 +53,6 @@ function coursePath(courseId: string): string {
 
 function courseTreesPath(courseIds: string[]): string {
     return `/api/course-trees/${courseIds.map(encodeURIComponent).join(',')}`;
-}
-
-function coursesValidateUrl(courseIds: string[]): string {
-    const params = new URLSearchParams();
-    params.set('ids', courseIds.join(','));
-    return `/api/courses?${params.toString()}`;
 }
 
 export function HomeClient({
@@ -116,54 +110,41 @@ export function HomeClient({
         setHasSearched(true);
 
         try {
-            const validateResponse = await fetch(coursesValidateUrl(courseIds));
-            if (!validateResponse.ok) {
-                const errData = await validateResponse.json().catch(() => null);
-                if (validateResponse.status === 404) {
+            const response = await fetch(courseTreesPath(courseIds));
+            const data = await response.json().catch(() => null);
+
+            const trees: CourseTree[] = Array.isArray(data?.trees) ? data.trees : [];
+            const treeErrors: { id: string; code: string; message: string }[] = Array.isArray(
+                data?.errors
+            )
+                ? data.errors
+                : [];
+
+            if (!response.ok) {
+                // Distinguish unknown-course 404s from server errors.
+                const unknownIds = treeErrors
+                    .filter((e) => e.code === 'not_found')
+                    .map((e) => e.id);
+
+                if (unknownIds.length > 0) {
                     throw new Error(
-                        typeof errData?.error === 'string'
-                            ? errData.error
-                            : 'Unknown course IDs.'
+                        `Unknown course${unknownIds.length > 1 ? 's' : ''}: ${unknownIds.join(', ')}`
                     );
                 }
+
                 throw new Error(
-                    typeof errData?.error === 'string'
-                        ? errData.error
+                    typeof data?.error === 'string'
+                        ? data.error
                         : 'Course validation is temporarily unavailable. Please try again later.'
                 );
             }
 
-            const found: { catalog_course_id: string }[] = await validateResponse.json();
-            const foundIds = new Set(
-                found.map((course) => normalizeCourseId(course.catalog_course_id))
-            );
-            const invalidIds = courseIds.filter((id) => !foundIds.has(id));
-            if (invalidIds.length > 0) {
+            if (trees.length === 0) {
+                const unknownIds = treeErrors.filter((e) => e.code === 'not_found').map((e) => e.id);
                 throw new Error(
-                    `Unknown course${invalidIds.length > 1 ? 's' : ''}: ${invalidIds.join(', ')}`
-                );
-            }
-
-            const response = await fetch(courseTreesPath(courseIds));
-            const data = await response.json().catch(() => null);
-
-            if (!response.ok) {
-                throw new Error(
-                    typeof data?.error === 'string'
-                        ? data.error
-                        : 'Failed to fetch course data'
-                );
-            }
-
-            const trees: CourseTree[] = Array.isArray(data?.trees) ? data.trees : [];
-            const treeErrors: { id: string; message: string }[] = Array.isArray(data?.errors)
-                ? data.errors
-                : [];
-
-            if (treeErrors.length > 0 || trees.length === 0) {
-                throw new Error(
-                    treeErrors.map((e) => e.message).join(' ') ||
-                        (typeof data?.error === 'string' ? data.error : 'Failed to fetch course data')
+                    unknownIds.length > 0
+                        ? `Unknown course${unknownIds.length > 1 ? 's' : ''}: ${unknownIds.join(', ')}`
+                        : (typeof data?.error === 'string' ? data.error : 'Failed to fetch course data')
                 );
             }
 

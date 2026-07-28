@@ -36,14 +36,11 @@ export async function GET(request: Request) {
     }
 
     try {
-        const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-
         const result = await client.query(
-            `
-            SELECT * FROM courses_data
-            WHERE catalog_course_id IN (${placeholders})
-        `,
-            ids
+            `SELECT catalog_course_id
+             FROM courses_data
+             WHERE catalog_course_id = ANY($1)`,
+            [ids]
         );
 
         if (result.rows.length === 0) {

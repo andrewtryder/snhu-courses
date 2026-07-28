@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "db:migrate": "tsx scripts/migrate.ts",
     "catalog:bootstrap": "tsx scripts/catalog-bootstrap.ts",
     "catalog:sync": "tsx scripts/catalog-sync.ts"
@@ -39,6 +40,7 @@
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

@@ -170,6 +170,43 @@ async function migrate() {
       ORDER BY catalog_course_id, pid;
     `;
 
+    // ── Query-supporting indexes ──────────────────────────────────────────────
+    // courses_data.pid is already the PRIMARY KEY (no extra index needed).
+    // prerequisites.(class_id, course_id) is a composite PRIMARY KEY covering
+    // class_id-first lookups; an explicit course_id index is added for
+    // getDependentCourseIds queries that filter on course_id alone.
+
+    await client.sql`
+      CREATE INDEX IF NOT EXISTS courses_data_catalog_course_id_idx
+      ON courses_data (catalog_course_id);
+    `;
+
+    await client.sql`
+      CREATE INDEX IF NOT EXISTS prerequisites_course_id_idx
+      ON prerequisites (course_id);
+    `;
+
+    await client.sql`
+      CREATE INDEX IF NOT EXISTS prerequisites_class_id_idx
+      ON prerequisites (class_id);
+    `;
+
+    // Matching indexes on staging tables for promotion performance.
+    await client.sql`
+      CREATE INDEX IF NOT EXISTS courses_data_stage_catalog_course_id_idx
+      ON courses_data_stage (catalog_course_id);
+    `;
+
+    await client.sql`
+      CREATE INDEX IF NOT EXISTS prerequisites_stage_course_id_idx
+      ON prerequisites_stage (course_id);
+    `;
+
+    await client.sql`
+      CREATE INDEX IF NOT EXISTS prerequisites_stage_class_id_idx
+      ON prerequisites_stage (class_id);
+    `;
+
     console.log('Migrations applied successfully');
   } finally {
     client.release();
