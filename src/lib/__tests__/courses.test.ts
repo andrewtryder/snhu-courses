@@ -6,25 +6,58 @@
  *
  * Run: npm test
  */
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 // ── Import only pure, non-DB exports for unit tests ──────────────────────────
 // We import the internal helper directly; the file-level module mock below
 // prevents any real @vercel/postgres or next/cache calls.
 
-vi.mock('@vercel/postgres', () => ({
-    db: {
-        connect: vi.fn(),
-    },
+const { dbConnect, persistentCache, unstableCache } = vi.hoisted(() => {
+    const entries = new Map<string, Promise<unknown>>();
+    return {
+        dbConnect: vi.fn(),
+        persistentCache: {
+            clear: () => entries.clear(),
+        },
+        unstableCache: vi.fn((fn: (...args: never[]) => unknown, keyParts: string[]) =>
+            async (...args: never[]) => {
+                const key = JSON.stringify([keyParts, args]);
+                const cached = entries.get(key);
+                if (cached) return cached;
+
+                const result = Promise.resolve(fn(...args));
+                entries.set(key, result);
+                try {
+                    return await result;
+                } catch (error) {
+                    // Next must be allowed to retry infrastructure failures.
+                    entries.delete(key);
+                    throw error;
+                }
+            }
+        ),
+    };
+});
+
+vi.mock('@vercel/postgres', () => ({ db: { connect: dbConnect } }));
+
+vi.mock('react', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('react')>()),
+    cache: <T extends (...args: never[]) => unknown>(fn: T) => fn,
 }));
 
 vi.mock('next/cache', () => ({
-    unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+    unstable_cache: unstableCache,
     revalidateTag: vi.fn(),
     revalidatePath: vi.fn(),
 }));
 
-import { buildTreesFromGraph } from '../courses';
+import {
+    buildTreesFromGraph,
+    getAllCourseIds,
+    getCourseById,
+    getCourseTrees,
+} from '../courses';
 import type { CourseTree } from '@/lib/courseGraphLayout';
 
 // ── Helper: quick CourseTree comparison ──────────────────────────────────────
@@ -34,6 +67,20 @@ function treeOf(course_id: string, name: string, prereqs?: CourseTree[]): Course
     if (prereqs && prereqs.length > 0) t.prerequisites = prereqs;
     return t;
 }
+
+function dbClient(overrides: Record<string, unknown> = {}) {
+    return {
+        release: vi.fn(),
+        query: vi.fn(),
+        sql: vi.fn(),
+        ...overrides,
+    };
+}
+
+beforeEach(() => {
+    persistentCache.clear();
+    dbConnect.mockReset();
+});
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -158,5 +205,87 @@ describe('buildTreesFromGraph', () => {
 
         const unknown = results.find((r) => r.id === 'UNKNOWN999')!;
         expect(unknown.tree).toBeNull();
+    });
+});
+
+describe('catalog cache wrappers', () => {
+    it('normalizes lowercase and uppercase course IDs before the persistent cache', async () => {
+        const query = vi.fn().mockResolvedValue({
+            rows: [{ catalog_course_id: 'IT140', title: 'Scripting', pid: '1' }],
+        });
+        dbConnect.mockResolvedValue(dbClient({ query }));
+
+        await getCourseById('it140');
+        await getCourseById('IT140');
+
+        expect(query).toHaveBeenCalledTimes(1);
+        expect(query.mock.calls[0]?.[1]).toEqual(['IT140']);
+    });
+
+    it('caches a successful empty course-ID result', async () => {
+        const sql = vi.fn().mockResolvedValue({ rows: [] });
+        dbConnect.mockResolvedValue(dbClient({ sql }));
+
+        await expect(getAllCourseIds()).resolves.toEqual([]);
+        await expect(getAllCourseIds()).resolves.toEqual([]);
+
+        expect(sql).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not persist an empty fallback when the database throws', async () => {
+        const sql = vi.fn().mockResolvedValue({ rows: [{ catalog_course_id: 'CS250' }] });
+        dbConnect
+            .mockRejectedValueOnce(new Error('Neon HTTP 402 quota exceeded'))
+            .mockResolvedValue(dbClient({ sql }));
+
+        await expect(getAllCourseIds()).resolves.toEqual([]);
+        await expect(getAllCourseIds()).resolves.toEqual(['CS250']);
+        await expect(getAllCourseIds()).resolves.toEqual(['CS250']);
+
+        expect(dbConnect).toHaveBeenCalledTimes(2);
+        expect(sql).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses one canonical multi-root cache entry while preserving requested order', async () => {
+        const query = vi
+            .fn()
+            .mockResolvedValueOnce({
+                rows: [
+                    { catalog_course_id: 'CS250', title: 'Software Development' },
+                    { catalog_course_id: 'IT140', title: 'Scripting' },
+                ],
+            })
+            .mockResolvedValueOnce({
+                rows: [
+                    { parent_id: 'IT140', parent_title: 'Scripting', child_id: 'CS250', child_title: 'Software Development' },
+                    { parent_id: 'CS250', parent_title: 'Software Development', child_id: 'MATH142', child_title: 'Precalculus' },
+                    { parent_id: 'IT140', parent_title: 'Scripting', child_id: 'MATH142', child_title: 'Precalculus' },
+                ],
+            });
+        dbConnect.mockResolvedValue(dbClient({ query }));
+
+        const reverse = await getCourseTrees(['it140', 'CS250']);
+        const canonical = await getCourseTrees(['cs250', 'IT140']);
+
+        expect(reverse.map((result) => result.id)).toEqual(['IT140', 'CS250']);
+        expect(canonical.map((result) => result.id)).toEqual(['CS250', 'IT140']);
+        expect(reverse[0]?.tree?.prerequisites?.map((node) => node.course_id)).toEqual(['CS250', 'MATH142']);
+        expect(reverse[1]?.tree?.prerequisites?.[0]?.course_id).toBe('MATH142');
+        expect(query).toHaveBeenCalledTimes(2);
+        expect(query.mock.calls[0]?.[1]).toEqual([['CS250', 'IT140']]);
+    });
+
+    it('keeps unknown and duplicate roots in their requested positions', async () => {
+        const query = vi
+            .fn()
+            .mockResolvedValueOnce({ rows: [{ catalog_course_id: 'IT140', title: 'Scripting' }] })
+            .mockResolvedValueOnce({ rows: [] });
+        dbConnect.mockResolvedValue(dbClient({ query }));
+
+        const results = await getCourseTrees(['unknown999', 'it140', 'IT140']);
+
+        expect(results.map((result) => result.id)).toEqual(['UNKNOWN999', 'IT140', 'IT140']);
+        expect(results.map((result) => result.tree === null)).toEqual([true, false, false]);
+        expect(query.mock.calls[0]?.[1]).toEqual([['IT140', 'UNKNOWN999']]);
     });
 });
