@@ -40,7 +40,7 @@ I also built [SNHU Transfers](https://snhu-transfers.vercel.app), another tool f
 - [Tailwind CSS](https://tailwindcss.com/)
 - [React Flow](https://reactflow.dev/) for graph rendering
 - [Dagre](https://github.com/dagrejs/dagre) for graph layout
-- [Vercel Postgres](https://vercel.com/docs/storage/vercel-postgres) for course and prerequisite data
+- [Neon Postgres](https://neon.tech/) through the Vercel Marketplace for course and prerequisite data
 - [Vercel Analytics](https://vercel.com/docs/analytics) for analytics
 - [Honeybadger](https://docs.honeybadger.io/lib/javascript/integration/nextjs/) for error monitoring
 - [Lucide React](https://lucide.dev/) for icons
@@ -81,7 +81,7 @@ src/
 
 ## Catalog data operations
 
-This app owns the shared Postgres catalog. Other apps (for example [SNHU Transfers](https://snhu-transfers.vercel.app)) may read through a stable contract, but must not write catalog tables.
+This app owns its dedicated Postgres catalog. Other apps (for example [SNHU Transfers](https://snhu-transfers.vercel.app)) may read through a stable contract, but must not write catalog tables.
 
 | Data | Owner | Notes |
 | --- | --- | --- |
@@ -93,21 +93,14 @@ This app owns the shared Postgres catalog. Other apps (for example [SNHU Transfe
 
 ### Migrate and bootstrap (required)
 
-CLI scripts load `POSTGRES_URL` from `.env.local`, then `.env`. Shell-exported values still win.
+CLI scripts load `POSTGRES_URL` from `.env.local`, then `.env`. Shell-exported values still win. For local migration and bootstrap, use Neon’s direct/unpooled URL in `.env.local`; the tools adapt that single setting to the direct client required by `@vercel/postgres`.
 
 ```bash
 npm run db:migrate
 npm run catalog:bootstrap
 ```
 
-Or pass the URL explicitly:
-
-```bash
-POSTGRES_URL='postgresql://...' npm run db:migrate
-POSTGRES_URL='postgresql://...' npm run catalog:bootstrap
-```
-
-Bootstrap is a manual production step. Until it finishes, cron returns `not_bootstrapped` and will not import the catalog.
+Bootstrap is a manual production step. Until it finishes, cron returns `not_bootstrapped` and will not import the catalog. Only one bootstrap may run at a time; a second invocation exits without clearing staging while the active lease is valid.
 
 Optional local batch tick (forces lease takeover):
 
@@ -123,12 +116,11 @@ Running sync from CircleCI or a trusted desktop avoids consuming Vercel function
 
 | Variable | Purpose |
 | --- | --- |
-| `POSTGRES_URL` | Pooled Neon connection URL |
-| `POSTGRES_URL_NON_POOLING` | Direct Neon connection URL (used by migration script) |
+| `POSTGRES_URL` | Direct Neon URL in local `.env.local`; pooled URL in Vercel Production, supplied by the Neon integration |
 | `CRON_SECRET` | Authorization secret for `/api/cron/catalog-sync` |
 | `REVALIDATE_SECRET` | Authorization secret for `POST /api/revalidate` |
 
-Generate secrets with `openssl rand -hex 32`. **Never commit secrets to the repository.**
+Generate secrets with `openssl rand -hex 32`. **Never commit secrets or local operator credentials to the repository.** `NEON_API_KEY` and `VERCEL_API_KEY` remain local-only transition credentials and are not application configuration.
 
 #### Workflow
 
@@ -136,7 +128,6 @@ Generate secrets with `openssl rand -hex 32`. **Never commit secrets to the repo
 
    ```bash
    npm run db:migrate
-   # or: POSTGRES_URL='postgresql://...' npm run db:migrate
    ```
 
 2. **Bootstrap** (one-time, required before first cron/sync can run):
@@ -175,6 +166,8 @@ Vercel builds tolerate a missing or temporarily unavailable Neon database:
 `generateStaticParams` returns no IDs, `/courses` renders its unavailable state,
 and the sitemap emits static routes only. Infrastructure-error fallbacks occur
 outside the persistent cache, so they are never retained as an empty catalog.
+
+GitHub Actions does not currently run catalog tools. If a reviewed workflow is added later, give it a direct connection only; do not add database secrets to unused workflows. The old shared database is not needed for rebuilding this catalog from upstream.
 
 #### Vercel cron (optional compatibility path)
 

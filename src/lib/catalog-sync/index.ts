@@ -1,5 +1,5 @@
-import { db, type VercelPoolClient } from '@vercel/postgres';
 import { reportServerError } from '@/lib/monitoring/honeybadger';
+import { withCatalogDbClient } from './database';
 import { fetchCourseDetails, fetchCourses, type KualiCourseListItem } from './fetch';
 import { parseCourse, type ParsedCourse } from './parse';
 import {
@@ -9,6 +9,7 @@ import {
   insertStagedCourse,
   setSyncError,
   startRefresh,
+  tryClaimBootstrapLease,
   tryClaimLease,
   type CatalogSyncState,
 } from './persist';
@@ -72,15 +73,6 @@ async function fetchAndParseBatch(
   });
 }
 
-async function withClient<T>(fn: (client: VercelPoolClient) => Promise<T>): Promise<T> {
-  const client = await db.connect();
-  try {
-    return await fn(client);
-  } finally {
-    client.release();
-  }
-}
-
 async function loadCourseList(): Promise<KualiCourseListItem[]> {
   const courses = await fetchCourses('');
   if (!courses || courses.length === 0) {
@@ -110,7 +102,12 @@ export async function bootstrapCatalog(
 ): Promise<{ imported: number; expected: number }> {
   const concurrency = options.concurrency ?? BOOTSTRAP_CONCURRENCY;
 
-  return withClient(async (client) => {
+  return withCatalogDbClient({ direct: true }, async (client) => {
+    const lease = await tryClaimBootstrapLease(client);
+    if (!lease) {
+      throw new Error('Catalog bootstrap is already running or requires inspection before retrying');
+    }
+
     console.log('Fetching complete course list...');
     const courses = await loadCourseList();
     const pids = uniquePids(courses);
@@ -132,7 +129,7 @@ export async function bootstrapCatalog(
       }
 
       const newCursor = i + slice.length;
-      await advanceCursor(client, newCursor, parsed.length);
+      await advanceCursor(client, syncId, newCursor, parsed.length);
       console.log(
         `Staged batch: ${parsed.length} imported, cursor ${newCursor}/${pids.length}`
       );
@@ -166,7 +163,7 @@ export async function runCatalogSyncBatch(
   const concurrency = options.concurrency ?? CRON_CONCURRENCY;
   const ignoreLease = options.ignoreLease ?? false;
 
-  return withClient(async (client) => {
+  return withCatalogDbClient({}, async (client) => {
     let state: CatalogSyncState | null = null;
     try {
       state = await getSyncState(client);
@@ -245,7 +242,7 @@ export async function runCatalogSyncBatch(
       }
 
       const newCursor = cursor + slice.length;
-      await advanceCursor(client, newCursor, parsed.length);
+      await advanceCursor(client, state.sync_id, newCursor, parsed.length);
       const importedTotal = state.imported_count + parsed.length;
 
       if (newCursor >= expected) {
