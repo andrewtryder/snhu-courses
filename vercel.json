@@ -1,8 +1,1 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/catalog-sync",
-      "schedule": "17 3 * * *"
-    }
-  ]
-}
+{}
