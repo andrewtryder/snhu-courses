@@ -1,18 +1,21 @@
 import type { CatalogDbClient } from './database';
-import { abortToIdle, markCompleted } from './persist';
+import { abortToIdle, CATALOG_SYNC_ID, markCompleted } from './persist';
 
 export interface ValidationResult {
   ok: boolean;
   errors: string[];
 }
 
-export async function validateStaging(client: CatalogDbClient): Promise<ValidationResult> {
+export async function validateStaging(
+  client: CatalogDbClient,
+  syncId: string
+): Promise<ValidationResult> {
   const errors: string[] = [];
 
   const coursesCount = await client.sql`SELECT COUNT(*)::int AS count FROM courses_stage`;
   const dataCount = await client.sql`SELECT COUNT(*)::int AS count FROM courses_data_stage`;
   const state = await client.sql`
-    SELECT expected_count, imported_count
+    SELECT expected_count, imported_count, sync_id, status
     FROM catalog_sync_state
     WHERE id = 'catalog'
   `;
@@ -24,6 +27,10 @@ export async function validateStaging(client: CatalogDbClient): Promise<Validati
       ? null
       : Number(state.rows[0].expected_count);
   const imported = Number(state.rows[0]?.imported_count ?? 0);
+
+  if (state.rows[0]?.sync_id !== syncId || state.rows[0]?.status !== 'running') {
+    errors.push('catalog sync ownership was lost before staging validation');
+  }
 
   if (stageCourses === 0) {
     errors.push('courses_stage is empty');
@@ -80,16 +87,30 @@ export async function validateStaging(client: CatalogDbClient): Promise<Validati
  * Truncate children first; insert parents first.
  * Does not touch transfer_courses.
  */
-export async function promoteStaging(client: CatalogDbClient): Promise<void> {
-  const validation = await validateStaging(client);
+export async function promoteStaging(client: CatalogDbClient, syncId: string): Promise<void> {
+  const validation = await validateStaging(client, syncId);
   if (!validation.ok) {
     const message = `Validation failed: ${validation.errors.join('; ')}`;
-    await abortToIdle(client, message);
+    if (!validation.errors.includes('catalog sync ownership was lost before staging validation')) {
+      await abortToIdle(client, syncId, message);
+    }
     throw new Error(message);
   }
 
   try {
     await client.query('BEGIN');
+
+    const ownership = await client.sql`
+      SELECT id
+      FROM catalog_sync_state
+      WHERE id = ${CATALOG_SYNC_ID}
+        AND sync_id = ${syncId}
+        AND status = 'running'
+      FOR UPDATE
+    `;
+    if (ownership.rows.length !== 1) {
+      throw new Error('Catalog sync ownership lost before promotion');
+    }
 
     // Truncate together (FK-safe). Child-first insert order still applies below.
     await client.sql`TRUNCATE prerequisites, courses_data, courses`;
@@ -98,11 +119,11 @@ export async function promoteStaging(client: CatalogDbClient): Promise<void> {
     await client.sql`INSERT INTO courses_data SELECT * FROM courses_data_stage`;
     await client.sql`INSERT INTO prerequisites SELECT * FROM prerequisites_stage`;
 
+    await markCompleted(client, syncId);
+
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   }
-
-  await markCompleted(client);
 }

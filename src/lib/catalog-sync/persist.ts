@@ -247,8 +247,12 @@ export async function setSyncError(client: CatalogDbClient, error: string): Prom
  * Abort a failed refresh. If bootstrap never completed (next_due_at still null),
  * restore awaiting_bootstrap so cron cannot start the initial import.
  */
-export async function abortToIdle(client: CatalogDbClient, error: string): Promise<void> {
-  await client.sql`
+export async function abortToIdle(
+  client: CatalogDbClient,
+  syncId: string,
+  error: string
+): Promise<void> {
+  const result = await client.sql`
     UPDATE catalog_sync_state
     SET
       status = CASE
@@ -258,7 +262,14 @@ export async function abortToIdle(client: CatalogDbClient, error: string): Promi
       lease_expires_at = NULL,
       last_error = ${error}
     WHERE id = ${CATALOG_SYNC_ID}
+      AND sync_id = ${syncId}
+      AND status = 'running'
+    RETURNING id
   `;
+
+  if (result.rows.length !== 1) {
+    throw new Error('Catalog sync no longer owns the current state');
+  }
 }
 
 export async function insertStagedCourse(
@@ -352,8 +363,8 @@ export async function advanceCursor(
   }
 }
 
-export async function markCompleted(client: CatalogDbClient): Promise<void> {
-  await client.sql`
+export async function markCompleted(client: CatalogDbClient, syncId: string): Promise<void> {
+  const result = await client.sql`
     UPDATE catalog_sync_state
     SET
       status = 'idle',
@@ -362,5 +373,12 @@ export async function markCompleted(client: CatalogDbClient): Promise<void> {
       lease_expires_at = NULL,
       last_error = NULL
     WHERE id = ${CATALOG_SYNC_ID}
+      AND sync_id = ${syncId}
+      AND status = 'running'
+    RETURNING id
   `;
+
+  if (result.rows.length !== 1) {
+    throw new Error('Catalog sync no longer owns the current state');
+  }
 }

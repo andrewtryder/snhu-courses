@@ -84,9 +84,17 @@ describe('catalog bootstrap ownership', () => {
     });
 
     await expect(advanceCursor(client, 'current-sync', 100, 50)).resolves.toBeUndefined();
-    await expect(markCompleted(client)).resolves.toBeUndefined();
+    await expect(markCompleted(client, 'current-sync')).resolves.toBeUndefined();
 
     expect(statements.join('\n')).toContain("status = 'idle'");
     expect(statements.join('\n')).toContain('lease_expires_at = NULL');
+  });
+
+  it('rejects a stale worker before completing the sync', async () => {
+    const client = clientWith(async () => ({ rows: [] }));
+
+    await expect(markCompleted(client, 'stale-sync')).rejects.toThrow(
+      'Catalog sync no longer owns the current state'
+    );
   });
 });
