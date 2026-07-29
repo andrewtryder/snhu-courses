@@ -139,7 +139,7 @@ export async function bootstrapCatalog(
     console.log(
       `Validating and promoting (${state.imported_count}/${state.expected_count} imported)...`
     );
-    await promoteStaging(client);
+    await promoteStaging(client, syncId);
     console.log('Bootstrap complete');
 
     return {
@@ -218,7 +218,7 @@ export async function runCatalogSyncBatch(
       const cursor = state.cursor;
 
       if (cursor >= expected) {
-        await promoteStaging(client);
+        await promoteStaging(client, state.sync_id);
         return {
           action: 'promoted',
           processed: 0,
@@ -246,7 +246,7 @@ export async function runCatalogSyncBatch(
       const importedTotal = state.imported_count + parsed.length;
 
       if (newCursor >= expected) {
-        await promoteStaging(client);
+        await promoteStaging(client, state.sync_id);
         return {
           action: 'promoted',
           processed: slice.length,
