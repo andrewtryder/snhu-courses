@@ -1,5 +1,5 @@
 import './load-env';
-import { db } from '@vercel/postgres';
+import { createClient } from '@vercel/postgres';
 
 async function migrate() {
   if (!process.env.POSTGRES_URL) {
@@ -7,7 +7,11 @@ async function migrate() {
     process.exit(1);
   }
 
-  const client = await db.connect();
+  // @vercel/postgres uses this legacy name for a direct client. Local tools
+  // intentionally accept the single POSTGRES_URL documented by this project.
+  process.env.POSTGRES_URL_NON_POOLING = process.env.POSTGRES_URL;
+  const client = createClient();
+  await client.connect();
 
   try {
     await client.sql`
@@ -209,7 +213,7 @@ async function migrate() {
 
     console.log('Migrations applied successfully');
   } finally {
-    client.release();
+    await client.end();
   }
 }
 

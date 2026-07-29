@@ -1,4 +1,4 @@
-import type { VercelPoolClient } from '@vercel/postgres';
+import type { CatalogDbClient } from './database';
 import { abortToIdle, markCompleted } from './persist';
 
 export interface ValidationResult {
@@ -6,7 +6,7 @@ export interface ValidationResult {
   errors: string[];
 }
 
-export async function validateStaging(client: VercelPoolClient): Promise<ValidationResult> {
+export async function validateStaging(client: CatalogDbClient): Promise<ValidationResult> {
   const errors: string[] = [];
 
   const coursesCount = await client.sql`SELECT COUNT(*)::int AS count FROM courses_stage`;
@@ -80,7 +80,7 @@ export async function validateStaging(client: VercelPoolClient): Promise<Validat
  * Truncate children first; insert parents first.
  * Does not touch transfer_courses.
  */
-export async function promoteStaging(client: VercelPoolClient): Promise<void> {
+export async function promoteStaging(client: CatalogDbClient): Promise<void> {
   const validation = await validateStaging(client);
   if (!validation.ok) {
     const message = `Validation failed: ${validation.errors.join('; ')}`;
