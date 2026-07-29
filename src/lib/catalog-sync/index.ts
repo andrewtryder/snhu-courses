@@ -157,13 +157,19 @@ export async function bootstrapCatalog(
  * - else: skip
  */
 export async function runCatalogSyncBatch(
-  options: { batchSize?: number; concurrency?: number; ignoreLease?: boolean } = {}
+  options: {
+    batchSize?: number;
+    concurrency?: number;
+    ignoreLease?: boolean;
+    direct?: boolean;
+  } = {}
 ): Promise<CatalogSyncResult> {
   const batchSize = options.batchSize ?? CRON_BATCH_SIZE;
   const concurrency = options.concurrency ?? CRON_CONCURRENCY;
   const ignoreLease = options.ignoreLease ?? false;
+  const direct = options.direct ?? false;
 
-  return withCatalogDbClient({}, async (client) => {
+  return withCatalogDbClient({ direct }, async (client) => {
     let state: CatalogSyncState | null = null;
     try {
       state = await getSyncState(client);

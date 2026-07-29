@@ -2,20 +2,40 @@ import './load-env';
 import { runCatalogSyncBatch } from '../src/lib/catalog-sync';
 
 async function main() {
-  if (!process.env.POSTGRES_URL) {
-    console.error('POSTGRES_URL is required');
-    process.exit(1);
+  const args = process.argv.slice(2);
+  const unsupportedArgs = args.filter((arg) => arg !== '--ignore-lease');
+  if (unsupportedArgs.length > 0) {
+    console.log(
+      JSON.stringify({
+        action: 'error',
+        error: `Unsupported argument(s): ${unsupportedArgs.join(', ')}`,
+      })
+    );
+    process.exitCode = 1;
+    return;
   }
 
-  const result = await runCatalogSyncBatch({ ignoreLease: true });
-  console.log(JSON.stringify(result, null, 2));
+  if (!process.env.POSTGRES_URL) {
+    console.log(JSON.stringify({ action: 'error', error: 'POSTGRES_URL is required' }));
+    process.exitCode = 1;
+    return;
+  }
+
+  const ignoreLease = args.includes('--ignore-lease');
+  let result = await runCatalogSyncBatch({ direct: true, ignoreLease });
+  while (result.action === 'batch') {
+    result = await runCatalogSyncBatch({ direct: true, ignoreLease });
+  }
+
+  console.log(JSON.stringify(result));
 
   if (result.action === 'error') {
-    process.exit(1);
+    process.exitCode = 1;
   }
 }
 
 main().catch((error) => {
-  console.error('Catalog sync failed:', error);
-  process.exit(1);
+  const message = error instanceof Error ? error.message : String(error);
+  console.log(JSON.stringify({ action: 'error', error: message }));
+  process.exitCode = 1;
 });
