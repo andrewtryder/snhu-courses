@@ -38,15 +38,15 @@ export async function POST(request: Request) {
     // 'max' means no expire limit — the entry is revalidated on the next request.
     revalidateTag('catalog-data', 'max');
 
-    // Also revalidate key pages so they are regenerated on next request.
-    revalidatePath('/', 'layout');
-    revalidatePath('/courses', 'page');
+    // Also revalidate key catalog-backed routes so they are regenerated on next request.
+    revalidatePath('/courses');
+    revalidatePath('/course/[id]', 'page');
     revalidatePath('/sitemap.xml');
 
     return NextResponse.json({
         revalidated: true,
         tag: 'catalog-data',
-        paths: ['/', '/courses', '/sitemap.xml'],
+        paths: ['/courses', '/course/[id]', '/sitemap.xml'],
         revalidatedAt: new Date().toISOString(),
     });
 }

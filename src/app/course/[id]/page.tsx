@@ -7,7 +7,6 @@ import {
     getCourseTree,
     getDependentCourseIds,
     getDirectPrerequisiteIds,
-    getAllCourseIds,
 } from '@/lib/courses';
 import { siteUrl } from '@/lib/site';
 import { serializeJsonLd } from '@/lib/safeJsonLd';
@@ -20,13 +19,10 @@ import {
     collectPrerequisiteIds,
 } from '@/components/PrerequisiteTreeList';
 
-// Revalidate course pages every 24 hours (ISR). When generateStaticParams returns []
-// because the database is unavailable at build time, pages are generated on first request.
-export const revalidate = 86400;
+export const revalidate = false;
 
 export async function generateStaticParams() {
-    const ids = await getAllCourseIds();
-    return ids.map((id) => ({ id }));
+    return [];
 }
 
 interface CoursePageProps {

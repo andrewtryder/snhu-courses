@@ -151,13 +151,14 @@ Generate secrets with `openssl rand -hex 32`. **Never commit secrets or local op
 
    The endpoint invalidates the `catalog-data` tag using Next.js's `max` profile
    (stale-while-revalidate: the next visitor can receive the prior catalog while
-   it refreshes) and revalidates `/`, `/courses`, and `/sitemap.xml`. It returns
+   it refreshes) and revalidates `/courses`, `/course/[id]`, and `/sitemap.xml`. It returns
    `401` if the secret is wrong and `500` if `REVALIDATE_SECRET` is not configured.
 
 ### Catalog query and build behavior
 
 Course records, trees, direct prerequisites, and dependents are persisted in the
-`catalog-data` cache for 24 hours. The recursive tree loader performs two queries
+`catalog-data` cache. Course pages are generated on first request and remain
+cached until catalog synchronization explicitly invalidates them. The recursive tree loader performs two queries
 on a cold cache (root titles and the recursive CTE); a complete cold course page
 also queries the course record, direct prerequisites, and dependents. Warm cached
 requests perform zero catalog queries.
