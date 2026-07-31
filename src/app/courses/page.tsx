@@ -3,7 +3,7 @@ import { getAllCourseSummaries, type CourseSummary } from '@/lib/courses';
 import { AppFooter } from '@/components/AppFooter';
 import { CourseSearchNav } from '@/components/CourseSearchNav';
 
-export const revalidate = 86400;
+export const revalidate = false;
 
 const title = 'SNHU Course Directory and Prerequisites';
 const description =
