@@ -29,6 +29,18 @@ interface CoursePageProps {
     params: Promise<{ id: string }>;
 }
 
+function formatCredits(credits: string | number | null | undefined): string | null {
+    if (credits == null || credits === '') {
+        return null;
+    }
+    const n = typeof credits === 'number' ? credits : Number(credits);
+    if (!Number.isFinite(n) || n === 0) {
+        return null;
+    }
+    const label = Number.isInteger(n) ? String(n) : String(n);
+    return n === 1 ? '1 credit' : `${label} credits`;
+}
+
 export async function generateMetadata({ params }: CoursePageProps): Promise<Metadata> {
     const { id } = await params;
     const courseId = id.toUpperCase();
@@ -143,6 +155,11 @@ export default async function CoursePage({ params }: CoursePageProps) {
         dependentCount: dependents.length,
     });
 
+    const academicLevel = course.academic_level?.trim() || null;
+    const creditsLabel = formatCredits(course.credits);
+    const description = course.description?.trim() || null;
+    const metaParts = [academicLevel, creditsLabel].filter(Boolean) as string[];
+
     return (
         <div className="flex min-h-screen flex-col">
             <CourseSearchNav initialQuery={courseId} currentPage="course" />
@@ -177,6 +194,16 @@ export default async function CoursePage({ params }: CoursePageProps) {
                             <span aria-hidden="true" className="mx-1.5 text-outline">·</span>
                             {summaryText}
                         </p>
+                        {metaParts.length > 0 && (
+                            <p className="mt-2 text-sm text-on-surface-variant">
+                                {metaParts.join(' · ')}
+                            </p>
+                        )}
+                        {description && (
+                            <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">
+                                {description}
+                            </p>
+                        )}
                     </header>
 
                     <section aria-labelledby="prereq-list-heading" className="mb-10">
