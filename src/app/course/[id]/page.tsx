@@ -168,10 +168,15 @@ export default async function CoursePage({ params }: CoursePageProps) {
                 id="main-content"
                 className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 md:px-8 md:py-12"
             >
-                <script
-                    type="application/ld+json"
-                    dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
-                />
+                {jsonLd.map((schema, index) => (
+                    <script
+                        key={index}
+                        type="application/ld+json"
+                        dangerouslySetInnerHTML={{
+                            __html: serializeJsonLd(schema),
+                        }}
+                    />
+                ))}
 
                 <article aria-labelledby="course-heading">
                     <header className="mb-8">
