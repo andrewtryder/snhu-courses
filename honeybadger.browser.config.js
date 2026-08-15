@@ -25,5 +25,6 @@ if (apiKey) {
     environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
     revision: process.env.VERCEL_GIT_COMMIT_SHA,
     filters: SENSITIVE_FILTERS,
+    ignoreBrowserExtensionErrors: true,
   });
 }
