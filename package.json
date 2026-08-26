@@ -20,6 +20,7 @@
     "@honeybadger-io/nextjs": "^5.11.0",
     "@honeybadger-io/react": "^6.1.30",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/functions": "^3.9.5",
     "@vercel/speed-insights": "^2.0.0",
     "@xyflow/react": "^12.11.2",
     "cheerio": "^1.2.0",
