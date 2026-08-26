@@ -10,12 +10,12 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 // ── Import only pure, non-DB exports for unit tests ──────────────────────────
 // We import the internal helper directly; the file-level module mock below
-// prevents any real @vercel/postgres or next/cache calls.
+// prevents any real database or next/cache calls.
 
-const { dbConnect, persistentCache, unstableCache } = vi.hoisted(() => {
+const { withPoolClientMock, persistentCache, unstableCache } = vi.hoisted(() => {
     const entries = new Map<string, Promise<unknown>>();
     return {
-        dbConnect: vi.fn(),
+        withPoolClientMock: vi.fn(),
         persistentCache: {
             clear: () => entries.clear(),
         },
@@ -39,7 +39,7 @@ const { dbConnect, persistentCache, unstableCache } = vi.hoisted(() => {
     };
 });
 
-vi.mock('@vercel/postgres', () => ({ db: { connect: dbConnect } }));
+vi.mock('@/lib/db/pool', () => ({ withPoolClient: withPoolClientMock }));
 
 vi.mock('react', async (importOriginal) => ({
     ...(await importOriginal<typeof import('react')>()),
@@ -70,7 +70,6 @@ function treeOf(course_id: string, name: string, prereqs?: CourseTree[]): Course
 
 function dbClient(overrides: Record<string, unknown> = {}) {
     return {
-        release: vi.fn(),
         query: vi.fn(),
         sql: vi.fn(),
         ...overrides,
@@ -79,7 +78,7 @@ function dbClient(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
     persistentCache.clear();
-    dbConnect.mockReset();
+    withPoolClientMock.mockReset();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -213,7 +212,7 @@ describe('catalog cache wrappers', () => {
         const query = vi.fn().mockResolvedValue({
             rows: [{ catalog_course_id: 'IT140', title: 'Scripting', pid: '1' }],
         });
-        dbConnect.mockResolvedValue(dbClient({ query }));
+        withPoolClientMock.mockImplementation(async (fn) => fn(dbClient({ query })));
 
         await getCourseById('it140');
         await getCourseById('IT140');
@@ -224,7 +223,7 @@ describe('catalog cache wrappers', () => {
 
     it('caches a successful empty course-ID result', async () => {
         const sql = vi.fn().mockResolvedValue({ rows: [] });
-        dbConnect.mockResolvedValue(dbClient({ sql }));
+        withPoolClientMock.mockImplementation(async (fn) => fn(dbClient({ sql })));
 
         await expect(getAllCourseIds()).resolves.toEqual([]);
         await expect(getAllCourseIds()).resolves.toEqual([]);
@@ -234,15 +233,15 @@ describe('catalog cache wrappers', () => {
 
     it('does not persist an empty fallback when the database throws', async () => {
         const sql = vi.fn().mockResolvedValue({ rows: [{ catalog_course_id: 'CS250' }] });
-        dbConnect
+        withPoolClientMock
             .mockRejectedValueOnce(new Error('Neon HTTP 402 quota exceeded'))
-            .mockResolvedValue(dbClient({ sql }));
+            .mockImplementation(async (fn) => fn(dbClient({ sql })));
 
         await expect(getAllCourseIds()).resolves.toEqual([]);
         await expect(getAllCourseIds()).resolves.toEqual(['CS250']);
         await expect(getAllCourseIds()).resolves.toEqual(['CS250']);
 
-        expect(dbConnect).toHaveBeenCalledTimes(2);
+        expect(withPoolClientMock).toHaveBeenCalledTimes(2);
         expect(sql).toHaveBeenCalledTimes(1);
     });
 
@@ -262,7 +261,7 @@ describe('catalog cache wrappers', () => {
                     { parent_id: 'IT140', parent_title: 'Scripting', child_id: 'MATH142', child_title: 'Precalculus' },
                 ],
             });
-        dbConnect.mockResolvedValue(dbClient({ query }));
+        withPoolClientMock.mockImplementation(async (fn) => fn(dbClient({ query })));
 
         const reverse = await getCourseTrees(['it140', 'CS250']);
         const canonical = await getCourseTrees(['cs250', 'IT140']);
@@ -280,7 +279,7 @@ describe('catalog cache wrappers', () => {
             .fn()
             .mockResolvedValueOnce({ rows: [{ catalog_course_id: 'IT140', title: 'Scripting' }] })
             .mockResolvedValueOnce({ rows: [] });
-        dbConnect.mockResolvedValue(dbClient({ query }));
+        withPoolClientMock.mockImplementation(async (fn) => fn(dbClient({ query })));
 
         const results = await getCourseTrees(['unknown999', 'it140', 'IT140']);
 
