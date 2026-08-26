@@ -1,11 +1,12 @@
+import { attachDatabasePool } from '@vercel/functions';
 import { Pool } from 'pg';
 import { resolvePgConnectionConfig } from './ssl';
 import { augmentQueryClient } from './sql';
 import type { QueryClient } from './types';
 
-const POOL_OPTIONS = {
+export const POOL_OPTIONS = {
   max: 1,
-  idleTimeoutMillis: 10_000,
+  idleTimeoutMillis: 5_000,
   connectionTimeoutMillis: 5_000,
 } as const;
 
@@ -22,11 +23,15 @@ function createPool(): Pool {
   const { connectionString: cleanedConnectionString, ssl } =
     resolvePgConnectionConfig(connectionString);
 
-  return new Pool({
+  const pool = new Pool({
     connectionString: cleanedConnectionString,
     ssl,
     ...POOL_OPTIONS,
   });
+
+  attachDatabasePool(pool);
+
+  return pool;
 }
 
 export function getPool(): Pool {
