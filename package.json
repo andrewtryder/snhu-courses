@@ -16,17 +16,17 @@
     "catalog:sync": "tsx scripts/catalog-sync.ts"
   },
   "dependencies": {
-    "@dagrejs/dagre": "^3.1.0",
-    "@honeybadger-io/nextjs": "^5.11.0",
-    "@honeybadger-io/react": "^6.1.30",
+    "@dagrejs/dagre": "^3.1.1",
+    "@honeybadger-io/nextjs": "^5.11.2",
+    "@honeybadger-io/react": "^6.1.32",
     "@vercel/analytics": "^2.0.1",
     "@vercel/functions": "^3.9.5",
     "@vercel/speed-insights": "^2.0.0",
-    "@xyflow/react": "^12.11.2",
+    "@xyflow/react": "^12.11.3",
     "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
-    "lucide-react": "^1.30.0",
-    "next": "^16.3.0",
+    "lucide-react": "^1.33.0",
+    "next": "^16.3.2",
     "pg": "^8.16.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
