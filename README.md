@@ -93,7 +93,7 @@ This app owns its dedicated Postgres catalog. Other apps (for example [SNHU Tran
 
 ### Migrate and bootstrap (required)
 
-CLI scripts load `POSTGRES_URL` from `.env.local`, then `.env`. Shell-exported values still win. For local migration and bootstrap, use Neon’s direct/unpooled URL in `.env.local`; the tools adapt that single setting to the direct client required by `@vercel/postgres`.
+CLI scripts load `POSTGRES_URL` from `.env.local`, then `.env`. Shell-exported values still win. Use a standard PostgreSQL connection string (Aiven, Neon, or another provider) with TLS enabled where required.
 
 ```bash
 npm run db:migrate

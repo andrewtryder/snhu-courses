@@ -1,5 +1,7 @@
 import './load-env';
-import { createClient } from '@vercel/postgres';
+import { Client } from 'pg';
+import { resolvePgConnectionConfig } from '../src/lib/db/ssl';
+import { augmentQueryClient } from '../src/lib/db/sql';
 
 async function migrate() {
   if (!process.env.POSTGRES_URL) {
@@ -7,11 +9,10 @@ async function migrate() {
     process.exit(1);
   }
 
-  // @vercel/postgres uses this legacy name for a direct client. Local tools
-  // intentionally accept the single POSTGRES_URL documented by this project.
-  process.env.POSTGRES_URL_NON_POOLING = process.env.POSTGRES_URL;
-  const client = createClient();
-  await client.connect();
+  const { connectionString, ssl } = resolvePgConnectionConfig(process.env.POSTGRES_URL);
+  const rawClient = new Client({ connectionString, ssl });
+  await rawClient.connect();
+  const client = augmentQueryClient(rawClient);
 
   try {
     await client.sql`
@@ -124,13 +125,11 @@ async function migrate() {
       );
     `;
 
-    // Additive column for databases created before sync_id existed.
     await client.sql`
       ALTER TABLE catalog_sync_state
       ADD COLUMN IF NOT EXISTS sync_id UUID;
     `;
 
-    // Immutable source snapshot for one catalog refresh (pid + ordinal).
     await client.sql`
       CREATE TABLE IF NOT EXISTS catalog_sync_items (
         sync_id UUID NOT NULL,
@@ -141,14 +140,12 @@ async function migrate() {
       );
     `;
 
-    // Manual catalog:bootstrap must run before cron may refresh.
     await client.sql`
       INSERT INTO catalog_sync_state (id, status, cursor, imported_count)
       VALUES ('catalog', 'awaiting_bootstrap', 0, 0)
       ON CONFLICT (id) DO NOTHING;
     `;
 
-    // Heal rows created before awaiting_bootstrap existed (idle + never scheduled).
     await client.sql`
       UPDATE catalog_sync_state
       SET status = 'awaiting_bootstrap'
@@ -158,8 +155,6 @@ async function migrate() {
         AND next_due_at IS NULL;
     `;
 
-    // Stable read-only contract for other apps (e.g. snhu-transfers).
-    // Do not query courses / courses_data directly from those codebases.
     await client.sql`
       CREATE OR REPLACE VIEW catalog_course_lookup AS
       SELECT DISTINCT ON (catalog_course_id)
@@ -173,12 +168,6 @@ async function migrate() {
       WHERE catalog_course_id IS NOT NULL
       ORDER BY catalog_course_id, pid;
     `;
-
-    // ── Query-supporting indexes ──────────────────────────────────────────────
-    // courses_data.pid is already the PRIMARY KEY (no extra index needed).
-    // prerequisites.(class_id, course_id) is a composite PRIMARY KEY covering
-    // class_id-first lookups; an explicit course_id index is added for
-    // getDependentCourseIds queries that filter on course_id alone.
 
     await client.sql`
       CREATE INDEX IF NOT EXISTS courses_data_catalog_course_id_idx
@@ -195,7 +184,6 @@ async function migrate() {
       ON prerequisites (class_id);
     `;
 
-    // Matching indexes on staging tables for promotion performance.
     await client.sql`
       CREATE INDEX IF NOT EXISTS courses_data_stage_catalog_course_id_idx
       ON courses_data_stage (catalog_course_id);
@@ -213,7 +201,7 @@ async function migrate() {
 
     console.log('Migrations applied successfully');
   } finally {
-    await client.end();
+    await rawClient.end();
   }
 }
 

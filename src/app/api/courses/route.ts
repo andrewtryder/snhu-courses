@@ -1,5 +1,5 @@
-import { db } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
+import { withPoolClient } from '@/lib/db/pool';
 import { parseCourseIdList } from '@/lib/courseIds';
 
 export async function GET(request: Request) {
@@ -24,36 +24,24 @@ export async function GET(request: Request) {
 
     const ids = parsed.ids;
 
-    let client;
     try {
-        client = await db.connect();
-    } catch (e) {
-        console.error('Database connection error:', e);
-        return NextResponse.json(
-            { error: 'Failed to connect to the database. Ensure POSTGRES_URL is set.' },
-            { status: 500 }
-        );
-    }
+        const rows = await withPoolClient(async (client) => {
+            const result = await client.query(
+                `SELECT catalog_course_id
+                 FROM courses_data
+                 WHERE catalog_course_id = ANY($1)`,
+                [ids]
+            );
+            return result.rows;
+        });
 
-    try {
-        const result = await client.query(
-            `SELECT catalog_course_id
-             FROM courses_data
-             WHERE catalog_course_id = ANY($1)`,
-            [ids]
-        );
-
-        if (result.rows.length === 0) {
+        if (rows.length === 0) {
             return NextResponse.json({ error: 'Classes not found.' }, { status: 404 });
         }
 
-        return NextResponse.json(result.rows);
+        return NextResponse.json(rows);
     } catch (e) {
         console.error('Error fetching courses', e);
         return NextResponse.json({ error: String(e) }, { status: 500 });
-    } finally {
-        if (client) {
-            client.release();
-        }
     }
 }

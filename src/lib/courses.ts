@@ -1,5 +1,5 @@
-import { db } from '@vercel/postgres';
-import type { VercelPoolClient } from '@vercel/postgres';
+import { withPoolClient } from '@/lib/db/pool';
+import type { QueryClient } from '@/lib/db/types';
 import { unstable_cache } from 'next/cache';
 import { cache } from 'react';
 import type { CourseTree } from '@/lib/courseGraphLayout';
@@ -37,13 +37,8 @@ export interface CourseSummary {
 
 // ─── Internal DB helpers ──────────────────────────────────────────────────────
 
-async function withDbClient<T>(fn: (client: VercelPoolClient) => Promise<T>): Promise<T> {
-    const client = await db.connect();
-    try {
-        return await fn(client);
-    } finally {
-        client.release();
-    }
+async function withDbClient<T>(fn: (client: QueryClient) => Promise<T>): Promise<T> {
+    return withPoolClient(fn);
 }
 
 // ─── CTE prerequisite graph engine ───────────────────────────────────────────
@@ -68,7 +63,7 @@ interface GraphEdge {
  * Returns { rootTitles, edges } — callers use `buildTreesFromGraph` to assemble trees.
  */
 async function fetchPrerequisiteGraph(
-    client: VercelPoolClient,
+    client: QueryClient,
     rootIds: string[]
 ): Promise<{ rootTitles: Map<string, string>; edges: GraphEdge[] }> {
     if (rootIds.length === 0) {
