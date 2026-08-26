@@ -1,6 +1,8 @@
 import fs from 'fs';
 import type { ConnectionOptions } from 'tls';
 
+const PEM_MARKER = '-----BEGIN CERTIFICATE-----';
+
 function stripSslQueryParams(connectionString: string): string {
   const normalized = connectionString.replace(/^postgresql:/, 'postgres:');
   const url = new URL(normalized);
@@ -15,13 +17,25 @@ function stripSslQueryParams(connectionString: string): string {
   return url.toString().replace(/^postgres:/, 'postgresql:');
 }
 
-function readCaCert(): string | undefined {
-  const caPath = process.env.POSTGRES_CA_CERT;
-  if (!caPath) {
+export function resolvePostgresCaCert(value: string | undefined): string | undefined {
+  if (!value) {
     return undefined;
   }
 
-  return fs.readFileSync(caPath, 'utf8');
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.includes(PEM_MARKER)) {
+    return trimmed.replace(/\\n/g, '\n');
+  }
+
+  return fs.readFileSync(trimmed, 'utf8');
+}
+
+function readCaCert(): string | undefined {
+  return resolvePostgresCaCert(process.env.POSTGRES_CA_CERT);
 }
 
 export function resolvePgConnectionConfig(connectionString: string): {
