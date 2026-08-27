@@ -34,14 +34,14 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/dotenv": "^6.1.1",
-    "@types/node": "26.1.2",
+    "@types/node": "26.2.0",
     "@types/pg": "^8.15.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.0",
+    "eslint-config-next": "16.3.2",
     "tailwindcss": "^4",
-    "tsx": "^4.23.11",
+    "tsx": "^4.23.12",
     "typescript": "^5",
     "vitest": "^3.2.7"
   }
