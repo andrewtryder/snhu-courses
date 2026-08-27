@@ -5,6 +5,14 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    settings: {
+      react: {
+        // ESLint 10 removed context.getFilename(); pin version to skip detect path.
+        version: "19.2.8",
+      },
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
