@@ -77,30 +77,58 @@ export default function AboutPage() {
                         </div>
                     </section>
 
-                    <section aria-label="Related tools" className="mt-8">
-                        <h2 className="mb-4 font-[family-name:var(--font-headline)] text-lg font-semibold text-on-surface">
+                    <section aria-label="Related tools" className="mt-8 space-y-4">
+                        <h2 className="font-[family-name:var(--font-headline)] text-lg font-semibold text-on-surface">
                             More Tools for SNHU Students
                         </h2>
-                        <a
-                            href="https://snhu-transfers.vercel.app"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="group flex items-start justify-between gap-4 rounded-lg border border-surface-variant bg-surface-container-low p-5 transition-colors hover:border-primary hover:bg-surface-container"
-                        >
-                            <div className="min-w-0">
-                                <p className="font-semibold text-primary group-hover:underline">
-                                    SNHU Transfers
-                                </p>
-                                <p className="mt-1 text-sm text-on-surface-variant">
-                                    Explore how certifications may transfer in as credits toward your
-                                    SNHU degree.
-                                </p>
-                            </div>
-                            <ArrowUpRight
-                                className="mt-0.5 h-5 w-5 shrink-0 text-outline transition-colors group-hover:text-primary"
-                                aria-hidden="true"
-                            />
-                        </a>
+                        <p className="text-sm leading-relaxed text-on-surface-variant">
+                            Planning a full degree? Use{' '}
+                            <a
+                                href="https://snhu-degreemap.vercel.app"
+                                className="font-semibold text-primary hover:underline"
+                            >
+                                SNHU Degree Map
+                            </a>{' '}
+                            to explore programs and see course requirements in context.
+                        </p>
+                        <div className="grid gap-3">
+                            <a
+                                href="https://snhu-transfers.vercel.app"
+                                className="group flex items-start justify-between gap-4 rounded-lg border border-surface-variant bg-surface-container-low p-5 transition-colors hover:border-primary hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                            >
+                                <div className="min-w-0">
+                                    <p className="font-semibold text-primary group-hover:underline">
+                                        Transfer Equivalencies
+                                    </p>
+                                    <p className="mt-1 text-sm text-on-surface-variant">
+                                        Explore how certifications may transfer in as credits toward your
+                                        SNHU degree.
+                                    </p>
+                                </div>
+                                <ArrowUpRight
+                                    className="mt-0.5 h-5 w-5 shrink-0 text-outline transition-colors group-hover:text-primary"
+                                    aria-hidden="true"
+                                />
+                            </a>
+                            <a
+                                href="https://snhu-degreemap.vercel.app"
+                                className="group flex items-start justify-between gap-4 rounded-lg border border-surface-variant bg-surface-container-low p-5 transition-colors hover:border-primary hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+                            >
+                                <div className="min-w-0">
+                                    <p className="font-semibold text-primary group-hover:underline">
+                                        Degree Map
+                                    </p>
+                                    <p className="mt-1 text-sm text-on-surface-variant">
+                                        Browse SNHU programs and visualize how courses fit into degree
+                                        requirements.
+                                    </p>
+                                </div>
+                                <ArrowUpRight
+                                    className="mt-0.5 h-5 w-5 shrink-0 text-outline transition-colors group-hover:text-primary"
+                                    aria-hidden="true"
+                                />
+                            </a>
+                        </div>
                     </section>
                 </article>
             </main>
