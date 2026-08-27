@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { ArrowUpRight, Info } from 'lucide-react';
-import { AppHeader } from '@/components/AppHeader';
+import { CourseSearchNav } from '@/components/CourseSearchNav';
 import { AppFooter } from '@/components/AppFooter';
 
 export const metadata: Metadata = {
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 export default function AboutPage() {
     return (
         <div className="flex min-h-screen flex-col">
-            <AppHeader showSearch={false} currentPage="about" />
+            <CourseSearchNav currentPage="about" />
 
             <main
                 id="main-content"
