@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://snhu-courses.vercel.app/sitemap.xml

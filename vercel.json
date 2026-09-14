@@ -34,7 +34,7 @@
       "permanent": true
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!sitemap\\.xml|robots\\.txt).*)",
       "destination": "https://snhu-tools.vercel.app/courses",
       "permanent": true
     }
